@@ -1,0 +1,83 @@
+name: PTZ 0.18.2 Test Image (AMD64)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release/0.18.2
+    paths:
+      - ".github/workflows/ptz-0.18.2-test-image.yml"
+      - "frigate/ptz/autotrack.py"
+      - "frigate/test/test_ptz_movement_prediction.py"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: frigate-ptz-0-18-2-test-image
+  cancel-in-progress: false
+
+jobs:
+  build_ptz_0_18_2:
+    runs-on: ubuntu-22.04
+    name: Build, test and publish Frigate 0.18.2 PTZ (amd64)
+    steps:
+      - name: Check out Frigate 0.18.2 fork source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up upstream Frigate 0.18.2 build tools
+        uses: ./.github/actions/setup
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build AMD64 image locally (not yet published)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/main/Dockerfile
+          platforms: linux/amd64
+          target: frigate
+          load: true
+          push: false
+          tags: |
+            ghcr.io/michlimek/frigate:ptz-0.18.2-${{ github.sha }}-amd64
+            ghcr.io/michlimek/frigate:ptz-0.18.2-test-amd64
+
+      - name: Run the PTZ regression tests inside the built image
+        run: |
+          docker run --rm --entrypoint python3 \
+            ghcr.io/michlimek/frigate:ptz-0.18.2-${{ github.sha }}-amd64 \
+            -m unittest -v frigate.test.test_ptz_movement_prediction
+
+      - name: Smoke test Frigate API with no cameras
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/ptz-config" "$RUNNER_TEMP/ptz-media"
+          printf 'mqtt:\n  enabled: false\ncameras: {}\n' > "$RUNNER_TEMP/ptz-config/config.yml"
+          docker run -d --name frigate-ptz-0182 --shm-size 256m \
+            -v "$RUNNER_TEMP/ptz-config:/config" \
+            -v "$RUNNER_TEMP/ptz-media:/media/frigate" \
+            --mount type=tmpfs,target=/tmp/cache,tmpfs-size=100000000 \
+            -p 127.0.0.1:5000:5000 \
+            ghcr.io/michlimek/frigate:ptz-0.18.2-${{ github.sha }}-amd64
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5000/api/version; then
+              docker rm -f frigate-ptz-0182
+              exit 0
+            fi
+            sleep 5
+          done
+          docker logs frigate-ptz-0182
+          docker rm -f frigate-ptz-0182
+          exit 1
+
+      - name: Publish only validated 0.18.2 PTZ image tags
+        shell: bash
+        run: |
+          docker push ghcr.io/michlimek/frigate:ptz-0.18.2-${{ github.sha }}-amd64
+          docker push ghcr.io/michlimek/frigate:ptz-0.18.2-test-amd64
+          echo "### Verified Frigate 0.18.2 PTZ test image" >> "$GITHUB_STEP_SUMMARY"
+          echo "ghcr.io/michlimek/frigate:ptz-0.18.2-${{ github.sha }}-amd64" >> "$GITHUB_STEP_SUMMARY"
