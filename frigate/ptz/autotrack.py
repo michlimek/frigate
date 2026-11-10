@@ -585,7 +585,9 @@ class PtzAutoTracker(threading.Thread):
 
     def _predict_movement_time(self, camera, pan, tilt):
         combined_movement = abs(pan) + abs(tilt)
-        input_data = np.array([self.intercept[camera], combined_movement])
+        # Regression is fitted with a column of ones, not the saved zero-step
+        # duration. Keep the persisted calibration format unchanged.
+        input_data = np.array([1.0, combined_movement])
 
         return np.dot(self.move_coefficients[camera], input_data)
 
