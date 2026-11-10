@@ -672,7 +672,9 @@ class PtzAutoTracker:
 
     def _predict_movement_time(self, camera, pan, tilt):
         combined_movement = abs(pan) + abs(tilt)
-        input_data = np.array([self.intercept[camera], combined_movement])
+        # Match the intercept column of ones used by the regression fit.
+        # The saved calibration baseline is not a prediction feature.
+        input_data = np.array([1.0, combined_movement])
 
         return np.dot(self.move_coefficients[camera], input_data)
 
