@@ -20,11 +20,19 @@ baseline, sequential Pan/Tilt distance and direct regression agreement.
 
 This branch includes
 `.github/workflows/ptz-0.18.2-test-image.yml`, running on a push
-to `release/0.18.2` and with a manual workflow trigger if GitHub
-Actions is enabled. It builds the **full** 0.18.2 Dockerfile, then
-runs five tests inside the container and checks the Frigate API
-with an empty camera configuration. Only if all pass does it
-push these separate, fork-local GHCR tags:
+to `release/0.18.2`, on PRs targeting the release branch,
+and with a manual workflow trigger if GitHub Actions is enabled. The image is based on the official released
+`ghcr.io/blakeblackshear/frigate:0.18.2`, with **only the 0.18.2
+`frigate/ptz/autotrack.py` file overlaid**. This avoids building
+historical third-party dependencies from retired download URLs.
+The full Frigate 0.18.2 entrypoint, libraries, database format, detector
+models and startup are preserved.
+
+The workflow runs on PRs against `release/0.18.2` and after merging
+on pushes to that branch. It executes five tests in the resulting
+container using a read-only mounted test file and then checks the Frigate
+API with an empty camera configuration. Only a successful push-branch
+workflow publishes these fork-local GHCR tags:
 
 ```text
 ghcr.io/michlimek/frigate:ptz-0.18.2-test-amd64
