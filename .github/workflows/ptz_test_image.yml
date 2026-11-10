@@ -1,0 +1,84 @@
+name: PTZ Test Image (AMD64)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ptz-test-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build_ptz_test_image:
+    name: Build and smoke-test PTZ image
+    if: github.repository == 'michlimek/frigate' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker build environment
+        uses: ./.github/actions/setup
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate immutable image tag
+        id: image
+        shell: bash
+        run: echo "tag=ptz-time-${GITHUB_SHA::7}-amd64" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and publish test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/main/Dockerfile
+          target: frigate
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/michlimek/frigate:${{ steps.image.outputs.tag }}
+          cache-from: type=registry,ref=ghcr.io/michlimek/frigate:cache-amd64
+          cache-to: type=registry,ref=ghcr.io/michlimek/frigate:cache-amd64,mode=max
+
+      - name: Smoke-test published image with isolated configuration
+        shell: bash
+        env:
+          IMAGE: ghcr.io/michlimek/frigate:${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          config_dir="${RUNNER_TEMP}/frigate-ptz-config"
+          media_dir="${RUNNER_TEMP}/frigate-ptz-media"
+          mkdir -p "${config_dir}" "${media_dir}"
+          printf 'mqtt:\n  enabled: false\ncameras: {}\n' > "${config_dir}/config.yml"
+          docker pull "${IMAGE}"
+          docker run -d --name frigate-ptz-smoke --shm-size 256m \
+            -v "${config_dir}:/config" -v "${media_dir}:/media/frigate" \
+            --mount type=tmpfs,target=/tmp/cache,tmpfs-size=100000000 \
+            -p 127.0.0.1:5000:5000 "${IMAGE}"
+          trap 'docker logs --tail 80 frigate-ptz-smoke || true; docker rm -f frigate-ptz-smoke || true' EXIT
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:5000/api/version; then
+              echo "PTZ test-image smoke test passed"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "PTZ test-image smoke test failed"
+          exit 1
+
+      - name: Summarize test image
+        if: success()
+        env:
+          IMAGE: ghcr.io/michlimek/frigate:${{ steps.image.outputs.tag }}
+        shell: bash
+        run: |
+          echo "## PTZ test image" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Image: \`${IMAGE}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Platform: linux/amd64. Published and smoke-tested with MQTT disabled and no cameras." >> "${GITHUB_STEP_SUMMARY}"
+          echo "This does not test ONVIF autotracking on real hardware." >> "${GITHUB_STEP_SUMMARY}"
