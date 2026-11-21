@@ -57,6 +57,19 @@ The two new tables are installed by migration
 creates a backup before applying database migrations. Take an independent
 database backup before deploying a test build.
 
+## Historical backfill
+
+When this version is installed, new car events are linked automatically to
+persistent visits. To import existing retained detections, open the Vehicle
+visits page as an administrator and choose **Import history**. This explicitly
+calls `POST /api/vehicle_visits/backfill?camera=obrotowa&hours=48&limit=250`
+and processes at most 250 unlinked historical events in chronological order
+per request. Repeat the import while the response indicates more history.
+
+The import never deletes existing events or modifies recording files. Failed
+events are reported, while valid events can still be imported. Previously
+expired events or deleted thumbnails cannot be restored by the import.
+
 ## Driveway Guard
 
 Version 0.3.3 can optionally resolve `visit_id` through the second endpoint.

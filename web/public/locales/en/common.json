@@ -342,6 +342,12 @@
     "playAll": "Play all clips",
     "sourceEvents": "Source recordings",
     "play": "Play",
-    "openInReview": "Open in Review"
+    "openInReview": "Open in Review",
+    "backfill": "Import history",
+    "backfillBusy": "Importing…",
+    "backfillConfirm": "Import retained car detections from the last 48 hours? Original recordings will not be changed.",
+    "backfillResult": "Imported {{count}} events",
+    "backfillMore": "More history may remain; repeat the import.",
+    "backfillError": "Unable to import vehicle history"
   }
 }

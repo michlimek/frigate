@@ -360,6 +360,12 @@
     "playAll": "Odtwórz wszystkie filmy",
     "sourceEvents": "Nagrania źródłowe",
     "play": "Odtwórz",
-    "openInReview": "Otwórz w przeglądzie"
+    "openInReview": "Otwórz w przeglądzie",
+    "backfill": "Importuj historię",
+    "backfillBusy": "Importowanie…",
+    "backfillConfirm": "Zaimportować zachowane wykrycia aut z ostatnich 48 godzin? Oryginalne nagrania nie zostaną zmienione.",
+    "backfillResult": "Zaimportowano {{count}} zdarzeń",
+    "backfillMore": "Mogą pozostać kolejne zdarzenia; ponów import.",
+    "backfillError": "Nie udało się zaimportować historii"
   }
 }

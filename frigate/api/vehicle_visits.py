@@ -1,5 +1,6 @@
 """Authenticated vehicle visits backed by persistent event links."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
@@ -9,11 +10,13 @@ from fastapi.responses import JSONResponse
 from frigate.api.auth import (
     allow_any_authenticated,
     get_allowed_cameras_for_filter,
+    require_role,
 )
 from frigate.models import Event, VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.inspection import event_timestamp
-from frigate.vehicle_visits.store import linked_events_for_visit
+from frigate.vehicle_visits.store import linked_events_for_visit, link_event_to_visit
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["vehicle-visits"])
 
 
@@ -120,4 +123,53 @@ async def lookup_vehicle_visit(
         "match_reason": link.match_reason,
         "is_first_event": event_id == visit.id,
         "visit_start_time": visit.start_time,
+    }
+
+
+@router.post(
+    "/vehicle_visits/backfill",
+    dependencies=[Depends(require_role(["admin"]))],
+)
+def backfill_vehicle_visits(
+    camera: str,
+    hours: int = Query(default=48, ge=1, le=720),
+    limit: int = Query(default=250, ge=1, le=500),
+    allowed_cameras: list[str] = Depends(get_allowed_cameras_for_filter),
+):
+    """Import a bounded batch of retained historical car events in time order.
+
+    This explicitly triggered operation never edits original Frigate events.
+    Calling it again processes the next batch of unlinked events.
+    """
+    if camera not in allowed_cameras:
+        return JSONResponse(content={}, status_code=403)
+    cutoff = (datetime.now(UTC) - timedelta(hours=hours)).timestamp()
+    rows = list(
+        Event.select()
+        .where(
+            (Event.camera == camera)
+            & (Event.label == "car")
+            & (Event.start_time >= cutoff)
+            & (Event.id.not_in(
+                VehicleVisitEvent.select(VehicleVisitEvent.event_id)
+            ))
+        )
+        .order_by(Event.start_time.asc())
+        .limit(limit)
+    )
+    imported = 0
+    failures = 0
+    for event in rows:
+        try:
+            link_event_to_visit(event)
+            imported += 1
+        except Exception:
+            # Continue with other historical rows and report partial failure.
+            logger.exception("Failed to import vehicle event %s", event.id)
+            failures += 1
+    return {
+        "camera": camera,
+        "processed": imported,
+        "failed": failures,
+        "more_possible": len(rows) == limit,
     }

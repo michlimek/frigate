@@ -1,4 +1,6 @@
 import { baseUrl } from "@/api/baseUrl";
+import { useIsAdmin } from "@/hooks/use-is-admin";
+import axios from "axios";
 import { useAllowedCameras } from "@/hooks/use-allowed-cameras";
 import { createRecordingReviewUrl } from "@/utils/recordingReviewUrl";
 import { useMemo, useState } from "react";
@@ -34,6 +36,9 @@ function visitClip(visit: VehicleVisit, index: number): string {
 export default function VehicleVisits() {
   const { t } = useTranslation(["common"]);
   const cameras = useAllowedCameras();
+  const isAdmin = useIsAdmin();
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
   const [chosenCamera, setChosenCamera] = useState<string>("obrotowa");
   const camera = cameras.includes(chosenCamera) ? chosenCamera : cameras[0];
   const [playback, setPlayback] = useState<{ visitId: string; index: number } | null>(null);
@@ -44,6 +49,27 @@ export default function VehicleVisits() {
   const { data, error, isLoading, mutate } = useSWR<VehicleVisit[]>(query, {
     refreshInterval: 30000,
   });
+
+  const backfill = async () => {
+    if (!camera || !window.confirm(t("vehicleVisits.backfillConfirm"))) {
+      return;
+    }
+    setBackfillBusy(true);
+    try {
+      const response = await axios.post<{
+        processed: number;
+        failed: number;
+        more_possible: boolean;
+      }>("vehicle_visits/backfill", null, { params: { camera, hours: 48, limit: 250 } });
+      setBackfillMessage(t("vehicleVisits.backfillResult", { count: response.data.processed })
+        + (response.data.more_possible ? " " + t("vehicleVisits.backfillMore") : ""));
+      await mutate();
+    } catch {
+      setBackfillMessage(t("vehicleVisits.backfillError"));
+    } finally {
+      setBackfillBusy(false);
+    }
+  };
 
   return (
     <main className="scrollbar-container h-full overflow-y-auto bg-background p-4 md:p-6">
@@ -69,8 +95,12 @@ export default function VehicleVisits() {
           <button className="rounded-md border px-3 py-2 text-sm" onClick={() => void mutate()}>
             {t("vehicleVisits.refresh")}
           </button>
+          {isAdmin && <button disabled={backfillBusy || !camera} className="rounded-md border px-3 py-2 text-sm disabled:opacity-50" onClick={() => void backfill()}>
+            {backfillBusy ? t("vehicleVisits.backfillBusy") : t("vehicleVisits.backfill")}
+          </button>}
         </div>
       </div>
+      {backfillMessage && <p className="mb-3 text-sm">{backfillMessage}</p>}
       {isLoading && <p>{t("vehicleVisits.loading")}</p>}
       {error && <p role="alert">{t("vehicleVisits.error")}</p>}
       {!isLoading && !error && !data?.length && <p>{t("vehicleVisits.empty")}</p>}
