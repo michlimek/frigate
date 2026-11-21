@@ -115,6 +115,28 @@ class ReviewSegment(Model):
     data = JSONField()  # additional data about detection like list of labels, zone, areas of significant motion
 
 
+class VehicleVisit(Model):
+    """Persistently group Frigate object events belonging to one vehicle visit."""
+
+    id = CharField(null=False, primary_key=True, max_length=30)
+    camera = CharField(index=True, max_length=20)
+    start_time = FloatField()
+    last_seen = FloatField()
+    reference_hash = CharField(null=True, max_length=16)
+    reference_box = JSONField(null=True)
+    license_plate = CharField(null=True, max_length=100)
+    samples = JSONField(default=list)
+
+
+class VehicleVisitEvent(Model):
+    """Record a stable mapping from an event ID to its vehicle visit."""
+
+    event_id = CharField(null=False, primary_key=True, max_length=30)
+    visit_id = CharField(index=True, max_length=30)
+    match_reason = CharField(max_length=48)
+    start_time = FloatField()
+
+
 class UserReviewStatus(Model):
     user_id = CharField(max_length=30)
     review_segment = ForeignKeyField(ReviewSegment, backref="user_reviews")

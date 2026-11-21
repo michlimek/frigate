@@ -11,6 +11,7 @@ from frigate.const import REPLAY_CAMERA_PREFIX
 from frigate.events.types import EventStateEnum, EventTypeEnum
 from frigate.models import Event
 from frigate.util.builtin import to_relative_box
+from frigate.vehicle_visits.store import link_event_to_visit
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +289,16 @@ class EventProcessor(threading.Thread):
                 )
                 .execute()
             )
+            if event_data["label"] == "car":
+                # Visit grouping is an optional read model. A failed association
+                # must not interrupt Frigate's recording/event processing.
+                try:
+                    link_event_to_visit(Event.get_by_id(event_data["id"]))
+                except Exception:
+                    logger.exception(
+                        "Failed to associate car event %s with a vehicle visit",
+                        event_data["id"],
+                    )
 
         # check if the stored event_data should be updated
         if updated_db or should_update_state(

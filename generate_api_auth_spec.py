@@ -63,6 +63,7 @@ from frigate.api import (
     record,
     review,
     vehicle_visits_preview,
+    vehicle_visits,
 )
 from frigate.api.auth import require_admin_by_default
 
@@ -150,6 +151,7 @@ def build_app() -> FastAPI:
         classification.router,
         review.router,
         vehicle_visits_preview.router,
+        vehicle_visits.router,
         main_app.router,
         preview.router,
         notification.router,

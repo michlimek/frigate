@@ -1,46 +1,95 @@
-# PTZ Vehicle Visits: read-only grouping preview
+# PTZ vehicle visits
 
-This experimental feature groups multiple Frigate car event IDs into one logical
-vehicle visit when there is strong independent visual and spatial evidence.
-It does not replace Frigate events, modify review segments, concatenate MP4
-files, or change any existing notification behavior.
+Vehicle visits group multiple Frigate `car` tracking events into one logical
+visit. Each event retains its original ID, thumbnail, clip and recording
+segments. No MP4 concatenation or deletion takes place.
 
-## Test endpoint
+## How it works
 
-Using the authenticated Frigate API:
+- When Frigate stores a real `car` event, the event processor writes an entry
+  into `vehiclevisitevent`. The corresponding `vehiclevisit` row is durable
+  across Frigate restarts.
+- A visit ID is the first Frigate event ID in the group.
+- Strong picture similarity (grayscale dHash) **and** strong relative box
+  overlap are required to connect different event IDs.
+- Several camera viewpoints can be remembered if they were captured under
+  the **same Frigate tracking ID**, which is stronger continuity evidence.
+- Different camera IDs or conflicting recognized number plates cannot match.
+- Ambiguous matching creates a separate visit rather than hiding a second car.
+- Matching candidates are capped to the previous 12 hours. There is no
+  time-only merge.
+- The dedicated PTZ `car` Norfair tracker uses camera-motion-aware
+  reidentification; static camera tracking is unchanged.
 
-    GET /api/vehicle_visits/preview?camera=obrotowa&hours=24&limit=200
+The algorithm intentionally remains conservative. Image hashes and box
+coordinates are not reliable across completely different PTZ viewpoints. It
+can fail to merge the same car when Frigate loses tracking during pan/zoom.
+Conversely, an identical car returning to the same spot without a confirmed
+departure can be matched to the earlier visit inside the 12-hour window.
+For security-critical use, independent approach/absence evidence is needed.
 
-Each returned visit contains a representative visit ID (the first source event
-ID), start/end times, source event IDs, and a match reason for every member.
+## UI
 
-Only events belonging to cameras that the current user can access are returned.
-There is no public endpoint or write operation.
+Open **Vehicle visits** from the Frigate navigation. Visits are displayed as
+one card per visit with one representative thumbnail and an ordered playlist
+of all still-retained source clips. Each clip links to the normal Frigate
+Review timeline. This is a separate view; the original Review timeline still
+shows ordinary Frigate review segments.
 
-## Matching limits
+Recordings are referenced, not rewritten. Source events and original review
+records remain available and obey existing Frigate retention settings.
 
-- Same camera is required.
-- New object IDs alone do not imply a new physical vehicle.
-- Time proximity alone never causes events to merge.
-- Very strong image hash similarity and overlapping relative object boxes can
-  reconnect detections after the camera returns to a similar viewpoint.
-- A matching recognized plate may support a recent visually plausible match.
-- Conflicting recognized plates prevent merging.
-- Missing thumbnails, changed PTZ viewpoints, or ambiguous appearances remain
-  separate. This errs on the side of not hiding a real second arrival.
-- A 12-hour lookback is a conservative heuristic, not proof of continuous
-  presence. A car that leaves and later returns to exactly the same spot may
-  look identical; the preview cannot reliably distinguish that case.
+## API
 
-The preview is not yet a persistent identity system and does not yet provide
-one item in the Frigate Reviews UI. Those steps require validation against
-actual PTZ events and a model of departures/returns, plus persistence and UI
-integration. Never use preview visit IDs as the sole authority for suppressing
-Driveway Guard notifications until these cases are validated.
+All endpoints require authentication and are scoped to cameras the caller
+can access.
+
+- `GET /api/vehicle_visits?camera=obrotowa&hours=48&limit=100`: persisted
+  visits with ordered source event IDs and playback information.
+- `GET /api/vehicle_visits/lookup?camera=obrotowa&event_id=EVENT_ID`: resolve
+  one event to `visit_id`; returns 404 until the event is persisted.
+- `GET /api/vehicle_visits/preview?camera=obrotowa&hours=24&limit=200`:
+  existing read-only historical preview; unlike the persisted list, does not
+  change the database.
+
+The two new tables are installed by migration
+`036_create_vehicle_visit_tables.py`. Frigate's built-in migration process
+creates a backup before applying database migrations. Take an independent
+database backup before deploying a test build.
+
+## Driveway Guard
+
+Version 0.3.3 can optionally resolve `visit_id` through the second endpoint.
+Set `frigate_vehicle_visits: true` only after installing a Frigate build
+containing this feature. Multiple re-detections already linked to one visit
+then do not trigger new Driveway Guard notifications. A bounded six-second
+wait handles database-save latency; if the API fails, Driveway Guard returns
+to its earlier local matching rather than losing all arrival alerts.
+
+The new feature does not change Frigate's native MQTT `frigate/events`
+payload. Existing consumers remain compatible.
 
 ## Validation
 
-    python3 -u -m unittest frigate.test.test_vehicle_visit_matching
+Run the repository checks in a Frigate development environment:
 
-No data migration is required for this preview. Restore the base branch to
-disable the endpoint. The original recordings and review events remain intact.
+```sh
+python3 -u -m unittest frigate.test.test_vehicle_visit_matching
+python3 -u -m unittest frigate.test.test_vehicle_visit_store
+python3 generate_api_auth_spec.py
+python3 generate_api_auth_spec.py --check
+ruff check frigate/vehicle_visits frigate/api/vehicle_visits.py
+ruff format --check frigate/vehicle_visits frigate/api/vehicle_visits.py
+npm --prefix web run lint
+npm --prefix web run build
+```
+
+The OpenAPI generator must be run from a fully installed Frigate checkout
+because its imports need the complete application dependencies. Do not edit
+`docs/static/frigate-api.yaml` manually.
+
+Before production promotion, replay representative actual PTZ events:
+stationary car reacquired after camera pan, a second similar car arriving,
+a car entering the garage, the same car leaving and returning, and camera
+restarts. No confidence metric can make an ambiguous single-frame match
+infallible.

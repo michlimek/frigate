@@ -271,7 +271,8 @@
       "anonymous": "anonymous",
       "logout": "Logout",
       "setPassword": "Set Password"
-    }
+    },
+    "vehicleVisits": "Vehicle visits"
   },
   "toast": {
     "copyUrlToClipboard": "Copied URL to clipboard.",
@@ -321,5 +322,26 @@
   "validation_errors": "Validation Errors",
   "credentialField": {
     "savedPlaceholder": "Saved — leave blank to keep current"
+  },
+  "vehicleVisits": {
+    "title": "Vehicle visits",
+    "subtitle": "Re-detections grouped into a logical visit, with all source clips retained.",
+    "camera": "Camera",
+    "refresh": "Refresh",
+    "loading": "Loading visits…",
+    "error": "Unable to load visits",
+    "empty": "No vehicle visits recorded yet",
+    "photo": "Vehicle thumbnail",
+    "visit": "Visit",
+    "eventCount_one": "{{count}} clip",
+    "eventCount_other": "{{count}} clips",
+    "lastSeen": "Last seen",
+    "id": "Visit ID",
+    "playing": "Playing {{index}} of {{count}}",
+    "stop": "Stop",
+    "playAll": "Play all clips",
+    "sourceEvents": "Source recordings",
+    "play": "Play",
+    "openInReview": "Open in Review"
   }
 }

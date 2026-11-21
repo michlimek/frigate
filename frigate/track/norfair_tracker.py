@@ -160,6 +160,17 @@ class NorfairTracker(ObjectTracker):
                 "reid_distance_threshold": 0.5,
                 "reid_hit_counter_max": 10,
             },
+            # PTZ car tracks need camera-motion-aware tracking and visual re-ID
+            # just like person tracks. Do not alter static camera tracking.
+            "car": {
+                "filter_factory": OptimizedKalmanFilterFactory(R=4, Q=0.2),
+                "distance_function": frigate_distance,
+                "distance_threshold": 3,
+                "past_detections_length": 8,
+                "reid_distance_function": histogram_distance,
+                "reid_distance_threshold": 0.35,
+                "reid_hit_counter_max": 15,
+            },
         }
 
         # Default tracker configuration
