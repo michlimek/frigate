@@ -21,7 +21,7 @@ router = APIRouter(tags=["vehicle-visits"])
 
 
 @router.get("/vehicle_visits", dependencies=[Depends(allow_any_authenticated())])
-async def vehicle_visits(
+def vehicle_visits(
     camera: str = "all",
     hours: int = Query(default=48, ge=1, le=720),
     limit: int = Query(default=100, ge=1, le=250),
@@ -94,7 +94,7 @@ async def vehicle_visits(
 @router.get(
     "/vehicle_visits/lookup", dependencies=[Depends(allow_any_authenticated())]
 )
-async def lookup_vehicle_visit(
+def lookup_vehicle_visit(
     camera: str,
     event_id: str,
     allowed_cameras: list[str] = Depends(get_allowed_cameras_for_filter),

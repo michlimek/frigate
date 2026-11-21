@@ -77,9 +77,14 @@ class TestVehicleVisitStore(unittest.TestCase):
         self.assertEqual(self.record(self.event("b", 105, digest=None))[0], "b")
 
     def test_ambiguous_candidate_keeps_new_visit(self):
-        self.record(self.event("a", 100, digest=0x33CC001122334450))
-        self.record(self.event("b", 110, digest=0x33CC00112233445F))
-        self.assertEqual(self.record(self.event("c", 120, digest=0x33CC001122334453)), ("c", "ambiguous_match"))
+        # A and B differ by six bits (not a match), while C is within
+        # three bits of both, so no single visit may be selected.
+        self.record(self.event("a", 100, digest=0x33CC001122334400))
+        self.record(self.event("b", 110, digest=0x33CC00112233443F))
+        self.assertEqual(
+            self.record(self.event("c", 120, digest=0x33CC001122334407)),
+            ("c", "ambiguous_match"),
+        )
 
     def test_twelve_hour_gap_starts_new_visit(self):
         self.record(self.event("a", 100))

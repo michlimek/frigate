@@ -6,9 +6,11 @@ segments. No MP4 concatenation or deletion takes place.
 
 ## How it works
 
-- When Frigate stores a real `car` event, the event processor writes an entry
-  into `vehiclevisitevent`. The corresponding `vehiclevisit` row is durable
-  across Frigate restarts.
+- For cameras configured with PTZ autotracking for `car`, Frigate writes
+  an entry into `vehiclevisitevent` while storing each real `car` event. The
+  corresponding `vehiclevisit` row is durable across Frigate restarts.
+  Other cameras are not automatically grouped, but their retained car events
+  can be imported explicitly through the admin backfill endpoint.
 - A visit ID is the first Frigate event ID in the group.
 - Strong picture similarity (grayscale dHash) **and** strong relative box
   overlap are required to connect different event IDs.

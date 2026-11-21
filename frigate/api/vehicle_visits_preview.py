@@ -59,7 +59,7 @@ def _normalized_box(value) -> tuple[float, float, float, float] | None:
     "/vehicle_visits/preview",
     dependencies=[Depends(allow_any_authenticated())],
 )
-async def vehicle_visits_preview(
+def vehicle_visits_preview(
     camera: str,
     allowed_cameras: list[str] = Depends(get_allowed_cameras_for_filter),
     limit: int = Query(default=200, ge=1, le=300),

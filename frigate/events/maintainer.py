@@ -291,10 +291,15 @@ class EventProcessor(threading.Thread):
                 )
                 .execute()
             )
-            if event_data["label"] == "car" and (
-                event_type == EventStateEnum.end
-                or time.monotonic()
-                - self._visit_sync_at.get(event_data["id"], float("-inf")) >= 20.0
+            if (
+                event_data["label"] == "car"
+                and self.config.cameras.get(camera) is not None
+                and self.config.cameras[camera].onvif.autotracking.enabled_in_config
+                and (
+                    event_type == EventStateEnum.end
+                    or time.monotonic()
+                    - self._visit_sync_at.get(event_data["id"], float("-inf")) >= 20.0
+                )
             ):
                 # Thumbnail decoding is expensive. Sample at most every 20s
                 # during tracking and always inspect the final event snapshot.

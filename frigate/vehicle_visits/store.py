@@ -1,7 +1,6 @@
 """Durable mapping between Frigate car events and conservative vehicle visits."""
 
 import logging
-from time import time
 
 from frigate.models import VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.inspection import inspect_event
