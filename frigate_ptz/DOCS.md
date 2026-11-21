@@ -1,61 +1,74 @@
-# Frigate PTZ Fix for Home Assistant, 0.18.2.post1
+# Frigate PTZ Fix - safe prebuilt-image release
 
-This add-on **does not require GitHub Actions or a GHCR image** from the
-SimplyQ fork. Home Assistant Supervisor builds the image locally when
-installing or updating this source-based add-on.
+Version: **0.18.2.post2** (AMD64).
 
-The multi-stage Dockerfile checks out a **pinned commit** of
-`michlimek/frigate` from `release/0.18.2`, compiles the web UI using
-Node 20, then overlays Python code, migrations, and frontend onto the
-official Frigate 0.18.2 runtime image. It does not modify files in the
-running Frigate container.
+## Why local source building is disabled
 
-## Existing local installation (preferred for Słopnice3)
+The previous 0.18.2.post1 add-on had a multi-stage Dockerfile that ran
+`npm run build` **inside Home Assistant Supervisor**. On Słopnice3 the build
+failed at about 2 GiB of Node/V8 heap (`Allocation failed - JavaScript heap
+out of memory`) and made the HA host temporarily unresponsive.
 
-If the current add-on has identity `local_frigate-ptz`, **do not**
-install the GitHub repository version alongside it. The repository source
-prefix would be different and HA would create a second add-on.
+The new add-on definition has **no local Dockerfile** and uses:
 
-Instead:
-1. Create a complete HA backup. Back up the Frigate add-on `/config`
-   directory, especially `frigate.db`, and record the previous image tag.
-2. Keep the exact existing `/addons/frigate_ptz/config.yaml` (or your actual
-   local add-on directory) with all custom devices, volumes, and ports.
-3. Add the `Dockerfile` from this folder to that same local add-on folder.
-4. Change its `version` to `"0.18.2.post1"` and **delete its `image:`
-   line**. Keep `slug: frigate-ptz` and every other existing field.
-   The included `upgrade-local.sh` performs only these two manifest edits,
-   after backing up `config.yaml`. Run it from the add-on directory.
-5. In Home Assistant: Settings > Add-ons/Apps > Add-on Store, reload,
-   open **Frigate 0.18.2 PTZ Fix**, then update.
-6. Supervisor downloads source from GitHub during the local Docker build.
-   This is CPU/RAM/disk-intensive (Node build) and can take significant time.
-7. Verify that the Frigate API, PTZ and the Vehicle visits page work before
-   enabling `frigate_vehicle_visits: true` in Driveway Guard.
+```yaml
+slug: frigate-ptz
+version: "0.18.2.post2"
+image: ghcr.io/michlimek/frigate
+```
 
-## Fresh install with GitHub repository
+Home Assistant only pulls an **already built** image with exact tag
+`ghcr.io/michlimek/frigate:0.18.2.post2`. The image must exist and be
+anonymously pullable in GHCR. A GitHub commit or version bump alone does not
+publish that image.
 
-Add repository URL:
-`https://github.com/michlimek/frigate#release/0.18.2`
+## Build and publish on an external computer / CI
 
-Open **Frigate 0.18.2 PTZ Fix** and Install. The new add-on will have a
-different repository-prefixed identity from an existing `local_frigate-ptz`.
-Running both Frigate instances simultaneously is not recommended. Existing
-`/addon_configs/local_frigate-ptz/` files will not be automatically carried
-over to a new installation.
+Release source is `release/0.18.2`. Build with
+`docker/ptz-vehicle-visits-release.Dockerfile` on an AMD64 host with enough
+RAM, not on a Home Assistant device. The release workflow builds the web UI
+with 4 GiB of Node/V8 heap, starts from the official Frigate 0.18.2 image,
+overlays the complete fork backend, migrations and built frontend, runs
+focused tests and smoke-tests startup **before** publishing the tag.
 
-When a newer version is committed to this GitHub add-on manifest, the
-Supervisor can detect it after reloading the repository. A version change is
-required for an update to appear; the Docker build does not perform
-continuous git polling.
+If GitHub Actions is unavailable, use Docker on an **external** computer,
+run the same build and tests, then publish to GHCR using an account with
+`write:packages` access. Never ask HA Supervisor to compile the frontend.
 
-## Notes
+## Existing local add-on Słopnice3: `local_frigate-ptz`
 
-- Source pinned to commit `7f79b8b31742b51b36380e47c1485480a9d9c9c3`.
-- Runtime base: `ghcr.io/blakeblackshear/frigate:0.18.2`.
-- AMD64 only for this test add-on.
-- No image tag in `config.yaml`: local Supervisor build is used.
-- The database migration cannot be automatically reversed when reverting
-  the container, so save the database backup.
-- Complete Docker build and real camera regression tests were not run by
-  ChatGPT. Do not assume success until Supervisor's build finishes.
+**Immediate recovery** after failed post1 update (no image publication needed):
+
+1. Stop retrying the 0.18.2.post1 update.
+2. Back up HA and Frigate data (`frigate.db`, `config.yml`, recordings).
+3. Copy `restore-local-stable.sh` to the existing local add-on folder
+   (commonly `/addons/frigate_ptz`), and execute it there. This restores
+   `config.yaml.bak-before-0.18.2.post1` and preserves the current manifest.
+4. Reload the local add-on repository in the Home Assistant Store. Do not
+   install a second Frigate instance.
+
+**Upgrade when 0.18.2.post2 image is actually published:**
+
+1. Verify the external CI/build and that GHCR image is public.
+2. Copy `upgrade-local-prebuilt.sh` to your **existing** local add-on folder.
+3. Run it from that folder. It will refuse to change the manifest unless it
+   successfully downloads an anonymous pull token and resolves the exact
+   `0.18.2.post2` manifest (HTTP 200).
+4. Reload the local add-on store, update the existing PTZ Fix add-on, and
+   verify live cameras, storage, PTZ, and vehicle-visits pages.
+5. Keep Driveway Guard `frigate_vehicle_visits` disabled until actual
+   camera recordings confirm that separate arrivals are not merged incorrectly.
+
+Both scripts preserve `slug: frigate-ptz`. `upgrade-local-prebuilt.sh`
+changes only `version` and `image` in the existing manifest. The old
+source-building `upgrade-local.sh` must not be used again.
+
+## Backups and rollback
+
+The original camera config and recordings are not altered by these scripts.
+However the **Frigate application** may migrate `frigate.db` when the
+new image is first started. Back up `frigate.db` first. Rolling back an
+image does not roll back a migrated database.
+
+Do not create a second add-on from the GitHub repository on the production
+host unless explicitly migrating the existing `local_frigate-ptz` identity.

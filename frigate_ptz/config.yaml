@@ -1,5 +1,6 @@
 name: "Frigate 0.18.2 PTZ Fix"
-version: "0.18.2.post1"
+version: "0.18.2.post2"
+image: ghcr.io/michlimek/frigate
 slug: frigate-ptz
 description: "SimplyQ Frigate 0.18.2 with PTZ tracking and vehicle visits"
 url: "https://github.com/michlimek/frigate"

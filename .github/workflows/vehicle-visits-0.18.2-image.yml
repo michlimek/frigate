@@ -1,4 +1,4 @@
-name: SimplyQ Frigate 0.18.2.post1 AMD64 image
+name: SimplyQ Frigate 0.18.2.post2 AMD64 image
 
 on:
   workflow_dispatch:
@@ -10,6 +10,8 @@ on:
       - ".dockerignore"
       - ".github/workflows/vehicle-visits-0.18.2-image.yml"
       - "docker/main/**"
+      - "docker/ptz-vehicle-visits-release.Dockerfile"
+      - "frigate_ptz/**"
       - "frigate/**"
       - "migrations/**"
       - "web/**"
@@ -21,6 +23,8 @@ on:
       - ".dockerignore"
       - ".github/workflows/vehicle-visits-0.18.2-image.yml"
       - "docker/main/**"
+      - "docker/ptz-vehicle-visits-release.Dockerfile"
+      - "frigate_ptz/**"
       - "frigate/**"
       - "migrations/**"
       - "web/**"
@@ -58,6 +62,14 @@ jobs:
           echo "RELEASE_IMAGE=ghcr.io/michlimek/frigate:${VERSION}-amd64" >> "$GITHUB_ENV"
           echo "ADDON_IMAGE=ghcr.io/michlimek/frigate:${VERSION}" >> "$GITHUB_ENV"
 
+      - name: Confirm HA add-on only pulls a prebuilt image
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^image: ghcr.io/michlimek/frigate$' frigate_ptz/config.yaml
+          grep -q '^version: "0.18.2.post2"$' frigate_ptz/config.yaml
+          test ! -e frigate_ptz/Dockerfile
+
       - name: Generate version and frontend build metadata
         run: |
           make version
@@ -72,9 +84,8 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: docker/main/Dockerfile
+          file: docker/ptz-vehicle-visits-release.Dockerfile
           platforms: linux/amd64
-          target: frigate
           load: true
           push: false
           tags: |
@@ -101,6 +112,13 @@ jobs:
           docker run --rm --workdir /opt/frigate --entrypoint python3 "$TEST_IMAGE" \
             -c "from frigate.version import VERSION; from frigate.models import VehicleVisit, VehicleVisitEvent; from frigate.api.vehicle_visits import router; assert '0.18.2.post' in VERSION; assert len(router.routes) >= 3; print(VERSION)"
 
+      - name: Check compiled frontend and backend in image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint /bin/sh "$TEST_IMAGE" -ec \
+            'test -f /opt/frigate/web/index.html && test -f /opt/frigate/frigate/vehicle_visits/store.py && test -f /opt/frigate/migrations/036_create_vehicle_visit_tables.py'
+
       - name: Smoke test Frigate API and database startup
         shell: bash
         run: |
@@ -121,6 +139,11 @@ jobs:
                 echo "API started with a different Frigate version" >&2
                 exit 1
               fi
+              curl --fail --silent --show-error \
+                "http://127.0.0.1:5000/api/vehicle_visits?camera=all" \
+                >/dev/null
+              docker exec frigate-vehicle-visits-smoke python3 -c \
+                "import sqlite3; d=sqlite3.connect('/config/frigate.db'); names={r[0] for r in d.execute('select name from sqlite_master where type = ?', ('table',))}; assert {'vehiclevisit', 'vehiclevisitevent'} <= names, names"
               exit 0
             fi
             sleep 5
