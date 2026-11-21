@@ -104,6 +104,35 @@ image. The old `ptz-0.18.2-test-amd64` image **does not contain**
 vehicle-visit code or frontend, because its Dockerfile copies only
 `frigate/ptz/autotrack.py`.
 
+### Home Assistant add-on upgrade
+
+Home Assistant Supervisor pulls the `image` setting with the exact
+`version` as the Docker image tag. For add-on installations, this release
+therefore also publishes `ghcr.io/michlimek/frigate:0.18.2.post1`.
+
+The add-on's original `config.yaml` needs this change in the **source
+manifest**, not the add-on Options tab:
+
+```yaml
+version: "0.18.2.post1"
+image: ghcr.io/michlimek/frigate
+```
+
+**Retain the existing `slug`, mounts, hardware permissions, network ports,
+ingress and settings** for an in-place upgrade. Changing the add-on slug or
+repository identifier makes Home Assistant treat it as a different add-on,
+which requires migrating `config.yml` and other add-on-scoped data.
+For official `ccab4aaf_frigate`, a third-party manifest cannot silently
+replace the upstream add-on, which is owned by the Frigate add-ons
+repository. The custom "Frigate 0.18.2 PTZ Fix" add-on should be updated in
+its own add-on source repository or locally in `addons/local` if it is a
+local add-on. Refresh the Add-on Store after updating its manifest.
+
+The image must be published and publicly pullable *before* refreshing or
+upgrading in Home Assistant. Do not attempt this in-place upgrade until the
+GitHub Actions publishing run succeeds, and back up the add-on configuration
+and database first.
+
 Before replacing a running Frigate instance, back up its `/config`
 directory (especially `frigate.db`) and record your current image tag.
 Version 0.18.2.post1 adds a SQLite migration; switching the container

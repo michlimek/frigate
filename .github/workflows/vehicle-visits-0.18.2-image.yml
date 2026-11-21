@@ -56,6 +56,7 @@ jobs:
           echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "TEST_IMAGE=ghcr.io/michlimek/frigate:${VERSION}-${GITHUB_SHA:0:7}-amd64" >> "$GITHUB_ENV"
           echo "RELEASE_IMAGE=ghcr.io/michlimek/frigate:${VERSION}-amd64" >> "$GITHUB_ENV"
+          echo "ADDON_IMAGE=ghcr.io/michlimek/frigate:${VERSION}" >> "$GITHUB_ENV"
 
       - name: Generate version and frontend build metadata
         run: |
@@ -79,6 +80,7 @@ jobs:
           tags: |
             ${{ env.TEST_IMAGE }}
             ${{ env.RELEASE_IMAGE }}
+            ${{ env.ADDON_IMAGE }}
           cache-from: type=gha,scope=vehicle-visits-amd64
           cache-to: type=gha,scope=vehicle-visits-amd64,mode=max
 
@@ -141,9 +143,11 @@ jobs:
           set -euo pipefail
           docker push "$TEST_IMAGE"
           docker push "$RELEASE_IMAGE"
+          docker push "$ADDON_IMAGE"
           {
             echo "### Verified SimplyQ Frigate image"
             echo "Version: $RELEASE_VERSION"
             echo "Immutable: $TEST_IMAGE"
-            echo "Install tag: $RELEASE_IMAGE"
+            echo "Docker tag: $RELEASE_IMAGE"
+            echo "Home Assistant add-on image: $ADDON_IMAGE"
           } >> "$GITHUB_STEP_SUMMARY"
