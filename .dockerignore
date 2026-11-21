@@ -9,7 +9,6 @@ core
 *.mp4
 *.jpg
 *.db
-*.ts
 
 web/dist/
 web/node_modules/
