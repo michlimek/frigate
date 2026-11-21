@@ -136,7 +136,8 @@ and triggers local Docker compilation must never be used again.
 ### External build without GitHub Actions
 
 On an AMD64 Linux workstation or an x86-64 PC running Docker Desktop/WSL2
-and Git, check out the release source and run
+and Git, check out the post2 candidate (before merge) or release source
+(after merge) and run
 `testing-scripts/release-frigate-prebuilt-amd64.sh`. It tests locally and
 does not publish by default. When validated and authenticated to GHCR,
 re-run with `PUBLISH=1` to publish.

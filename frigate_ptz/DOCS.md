@@ -24,7 +24,9 @@ publish that image.
 
 ## Build and publish on an external computer / CI
 
-Release source is `release/0.18.2`. Build with
+For the initial pre-merge test use candidate branch
+`fix/ha-ptz-prebuilt-only-0.18.2.post2`; after promotion use
+`release/0.18.2`. Build with
 `docker/ptz-vehicle-visits-release.Dockerfile` on an AMD64 host with enough
 RAM, not on a Home Assistant device. The release workflow builds the web UI
 with 4 GiB of Node/V8 heap, starts from the official Frigate 0.18.2 image,

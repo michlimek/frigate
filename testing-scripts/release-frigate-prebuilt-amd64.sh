@@ -13,10 +13,13 @@ command -v make >/dev/null || { echo "make is required" >&2; exit 1; }
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 branch="$(git symbolic-ref --short HEAD)"
-if [[ "$branch" != "release/0.18.2" ]]; then
-  echo "Checkout release/0.18.2 before publishing, got $branch" >&2
-  exit 1
-fi
+case "$branch" in
+  release/0.18.2|fix/ha-ptz-prebuilt-only-0.18.2.post2) ;;
+  *)
+    echo "Build only the reviewed post2 release or candidate branch; got $branch" >&2
+    exit 1
+    ;;
+esac
 
 version="$(awk '$1 == "VERSION" && $2 == "=" {print $3}' Makefile)"
 if [[ ! "$version" =~ ^0\.18\.2\.post[0-9]+$ ]]; then
