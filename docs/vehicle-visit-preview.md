@@ -84,6 +84,33 @@ to its earlier local matching rather than losing all arrival alerts.
 The new feature does not change Frigate's native MQTT `frigate/events`
 payload. Existing consumers remain compatible.
 
+## Installable image (SimplyQ 0.18.2.post1)
+
+This repository has a dedicated AMD64 image build workflow for the full
+Frigate backend, migrations and web frontend (not the older PTZ-only
+overlay). It is built from `docker/main/Dockerfile`, and is pushed to
+GHCR **only after** the container tests and API smoke test pass.
+
+Image after a successful publish:
+
+```yaml
+image: ghcr.io/michlimek/frigate:0.18.2.post1-amd64
+```
+
+An immutable tag `0.18.2.post1-<commit-sha7>-amd64` is published in
+addition to the version tag. Check the GitHub Actions workflow run and
+GHCR package before pulling: a code merge alone does not publish an
+image. The old `ptz-0.18.2-test-amd64` image **does not contain**
+vehicle-visit code or frontend, because its Dockerfile copies only
+`frigate/ptz/autotrack.py`.
+
+Before replacing a running Frigate instance, back up its `/config`
+directory (especially `frigate.db`) and record your current image tag.
+Version 0.18.2.post1 adds a SQLite migration; switching the container
+image back to a prior version does not reverse a completed database
+migration. Do not enable Driveway Guard visit-ID suppression until
+your real PTZ events have been checked for incorrect visit grouping.
+
 ## Validation
 
 Run the repository checks in a Frigate development environment:
