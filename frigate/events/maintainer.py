@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from multiprocessing import Queue
 from multiprocessing.synchronize import Event as MpEvent
 from typing import Any
@@ -11,6 +12,7 @@ from frigate.const import REPLAY_CAMERA_PREFIX
 from frigate.events.types import EventStateEnum, EventTypeEnum
 from frigate.models import Event
 from frigate.util.builtin import to_relative_box
+from frigate.vehicle_visits.store import link_event_to_visit
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +79,7 @@ class EventProcessor(threading.Thread):
         self.config = config
         self.timeline_queue = timeline_queue
         self.events_in_process: dict[str, dict[str, Any]] = {}
+        self._visit_sync_at: dict[str, float] = {}
         self.stop_event = stop_event
 
         self.event_receiver = EventUpdateSubscriber()
@@ -288,6 +291,27 @@ class EventProcessor(threading.Thread):
                 )
                 .execute()
             )
+            if (
+                event_data["label"] == "car"
+                and self.config.cameras.get(camera) is not None
+                and self.config.cameras[camera].onvif.autotracking.enabled_in_config
+                and (
+                    event_type == EventStateEnum.end
+                    or time.monotonic()
+                    - self._visit_sync_at.get(event_data["id"], float("-inf")) >= 20.0
+                )
+            ):
+                # Thumbnail decoding is expensive. Sample at most every 20s
+                # during tracking and always inspect the final event snapshot.
+                self._visit_sync_at[event_data["id"]] = time.monotonic()
+                try:
+                    link_event_to_visit(Event.get_by_id(event_data["id"]))
+                except Exception:
+                    # Optional grouping must never interrupt recorded events.
+                    logger.exception(
+                        "Failed to associate car event %s with a vehicle visit",
+                        event_data["id"],
+                    )
 
         # check if the stored event_data should be updated
         if updated_db or should_update_state(
@@ -297,6 +321,7 @@ class EventProcessor(threading.Thread):
             self.events_in_process[event_data["id"]] = event_data
 
         if event_type == EventStateEnum.end:
+            self._visit_sync_at.pop(event_data["id"], None)
             del self.events_in_process[event_data["id"]]
             self.event_end_publisher.publish((event_data["id"], camera, updated_db))  # type: ignore[arg-type]
 

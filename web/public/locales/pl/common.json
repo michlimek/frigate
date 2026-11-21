@@ -279,7 +279,8 @@
     "profiles": "Profile",
     "actions": "Akcje",
     "features": "Funkcje",
-    "chat": "Czat"
+    "chat": "Czat",
+    "vehicleVisits": "Wizyty pojazdów"
   },
   "role": {
     "viewer": "Przeglądający",
@@ -338,5 +339,33 @@
   "validation_errors": "Błędy walidacji",
   "credentialField": {
     "savedPlaceholder": "Zapisano — pozostaw puste, aby zachować bieżącą wartość"
+  },
+  "vehicleVisits": {
+    "title": "Wizyty pojazdów",
+    "subtitle": "Ponowne wykrycia zgrupowane w jedną wizytę; oryginalne nagrania są zachowane.",
+    "camera": "Kamera",
+    "refresh": "Odśwież",
+    "loading": "Wczytywanie wizyt…",
+    "error": "Nie można wczytać wizyt",
+    "empty": "Brak zarejestrowanych wizyt pojazdów",
+    "photo": "Zdjęcie samochodu",
+    "visit": "Wizyta",
+    "eventCount_one": "{{count}} nagranie",
+    "eventCount_few": "{{count}} nagrania",
+    "eventCount_many": "{{count}} nagrań",
+    "lastSeen": "Ostatnio widziany",
+    "id": "ID wizyty",
+    "playing": "Odtwarzanie {{index}} z {{count}}",
+    "stop": "Zatrzymaj",
+    "playAll": "Odtwórz wszystkie filmy",
+    "sourceEvents": "Nagrania źródłowe",
+    "play": "Odtwórz",
+    "openInReview": "Otwórz w przeglądzie",
+    "backfill": "Importuj historię",
+    "backfillBusy": "Importowanie…",
+    "backfillConfirm": "Zaimportować zachowane wykrycia aut z ostatnich 48 godzin? Oryginalne nagrania nie zostaną zmienione.",
+    "backfillResult": "Zaimportowano {{count}} zdarzeń",
+    "backfillMore": "Mogą pozostać kolejne zdarzenia; ponów import.",
+    "backfillError": "Nie udało się zaimportować historii"
   }
 }
