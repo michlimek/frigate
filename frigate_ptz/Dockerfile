@@ -6,12 +6,15 @@ FROM node:20-bookworm AS simplyq-source
 ARG SOURCE_COMMIT=7f79b8b31742b51b36380e47c1485480a9d9c9c3
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth=1 --branch release/0.18.2 \
-      https://github.com/michlimek/frigate.git /src \
-    && test "$(git -C /src rev-parse HEAD)" = "$SOURCE_COMMIT"
+RUN mkdir -p /src \
+    && curl --fail --location --silent --show-error --retry 3 \
+       "https://codeload.github.com/michlimek/frigate/tar.gz/${SOURCE_COMMIT}" \
+       -o /tmp/frigate-src.tar.gz \
+    && tar -xzf /tmp/frigate-src.tar.gz -C /src --strip-components=1 \
+    && rm /tmp/frigate-src.tar.gz
 
 WORKDIR /src/web
 RUN npm install
@@ -22,7 +25,7 @@ RUN printf 'VITE_GIT_COMMIT_HASH=%s\n' "$(printf '%s' "$SOURCE_COMMIT" | cut -c 
     && rm -rf dist/BASE_PATH
 
 RUN printf 'VERSION = "0.18.2.post1-%s"\n' \
-      "$(git -C /src rev-parse --short=7 HEAD)" > /src/frigate/version.py
+      "$(printf '%s' "$SOURCE_COMMIT" | cut -c 1-7)" > /src/frigate/version.py
 
 # Reuse official Frigate 0.18.2 runtime (ffmpeg, detectors, s6, nginx).
 # Replace complete application code, migrations, and compiled web UI.
