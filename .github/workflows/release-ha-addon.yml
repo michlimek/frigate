@@ -1,0 +1,225 @@
+name: SimplyQ Frigate HA channel (prebuilt only)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Periodically publish new validated source versions to the HA channel.
+    - cron: "17 2 * * *"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/release-ha-addon.yml"
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: simplyq-frigate-ha-release
+  cancel-in-progress: false
+
+jobs:
+  select-release:
+    name: Detect unpublished version
+    runs-on: ubuntu-22.04
+    outputs:
+      publish: \${{ steps.select.outputs.publish }}
+      source_ref: \${{ steps.select.outputs.source_ref }}
+      version: \${{ steps.select.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Compare release and HA channel versions
+        id: select
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin \
+            '+refs/heads/release/0.18.2:refs/remotes/origin/release/0.18.2' \
+            '+refs/heads/ha-addon:refs/remotes/origin/ha-addon'
+          if git ls-remote --heads origin fix/ha-ptz-prebuilt-only-0.18.2.post2 | grep -q .; then
+            git fetch --no-tags --depth=1 origin \
+              '+refs/heads/fix/ha-ptz-prebuilt-only-0.18.2.post2:refs/remotes/origin/fix/ha-ptz-prebuilt-only-0.18.2.post2'
+          fi
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+
+          def content(branch, path):
+              return subprocess.check_output(
+                  ["git", "show", f"refs/remotes/origin/{branch}:{path}"],
+                  text=True,
+              )
+
+          def extract(text, field):
+              match = re.search(rf"^{re.escape(field)}\s*[:=]\s*['\"]?([^\s'\"#]+)", text, re.M)
+              if not match:
+                  raise RuntimeError(f"Missing {field}")
+              return match.group(1)
+
+          def release_number(version):
+              match = re.fullmatch(r"0\.18\.2\.post(\d+)", version)
+              return int(match.group(1)) if match else -1
+
+          current = extract(content("ha-addon", "frigate_ptz/config.yaml"), "version")
+          candidates = [("release/0.18.2", extract(content("release/0.18.2", "Makefile"), "VERSION"))]
+          try:
+              candidate = extract(content("fix/ha-ptz-prebuilt-only-0.18.2.post2", "Makefile"), "VERSION")
+              candidates.append(("fix/ha-ptz-prebuilt-only-0.18.2.post2", candidate))
+          except subprocess.CalledProcessError:
+              pass
+          source, version = max(candidates, key=lambda item: release_number(item[1]))
+          current_number = release_number(current)
+          next_number = release_number(version)
+          publish = next_number > current_number
+          if publish and next_number < 0:
+              raise RuntimeError(f"Invalid candidate version: {version}")
+          print(f"Current HA channel: {current}")
+          print(f"Source branch: {source}, candidate version: {version}")
+          print(f"Publish needed: {publish}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"publish={str(publish).lower()}\n")
+              out.write(f"source_ref={source}\n")
+              out.write(f"version={version}\n")
+          PY
+
+  build-test-publish:
+    name: Build outside HA, verify, then publish
+    needs: select-release
+    if: needs.select-release.outputs.publish == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    env:
+      RELEASE_VERSION: \${{ needs.select-release.outputs.version }}
+    steps:
+      - name: Check out candidate release
+        uses: actions/checkout@v6
+        with:
+          ref: \${{ needs.select-release.outputs.source_ref }}
+          persist-credentials: false
+      - name: Validate Supervisor manifest and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(awk '$1 == "VERSION" && $2 == "=" {print $3}' Makefile)"
+          test "$VERSION" = "$RELEASE_VERSION"
+          grep -Fxq "version: \"$RELEASE_VERSION\"" frigate_ptz/config.yaml
+          grep -Fxq 'image: ghcr.io/michlimek/frigate' frigate_ptz/config.yaml
+          test ! -e frigate_ptz/Dockerfile
+          test -f docker/ptz-vehicle-visits-release.Dockerfile
+          make version
+          grep -q "$RELEASE_VERSION" frigate/version.py
+          echo "IMAGE=ghcr.io/michlimek/frigate:$RELEASE_VERSION" >> "$GITHUB_ENV"
+          echo "IMMUTABLE=ghcr.io/michlimek/frigate:$RELEASE_VERSION-$(git rev-parse --short=7 HEAD)-amd64" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build complete Frigate on external runner
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/ptz-vehicle-visits-release.Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: |
+            \${{ env.IMAGE }}
+            \${{ env.IMMUTABLE }}
+          cache-from: type=gha,scope=frigate-ha-prebuilt
+          cache-to: type=gha,scope=frigate-ha-prebuilt,mode=max
+      - name: Run PTZ and vehicle-visit regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --workdir /opt/frigate --entrypoint python3 "$IMAGE" \
+            -m unittest -v \
+            frigate.test.test_vehicle_visit_matching \
+            frigate.test.test_vehicle_visit_store \
+            frigate.test.test_ptz_movement_prediction
+      - name: Validate packaged backend, UI and migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint /bin/sh "$IMAGE" -ec \
+            'test -f /opt/frigate/web/index.html && test -f /opt/frigate/frigate/vehicle_visits/store.py && test -f /opt/frigate/migrations/036_create_vehicle_visit_tables.py'
+          docker run --rm --workdir /opt/frigate --entrypoint python3 "$IMAGE" \
+            -c "from frigate.version import VERSION; from frigate.models import VehicleVisit, VehicleVisitEvent; from frigate.api.vehicle_visits import router; assert '$RELEASE_VERSION' in VERSION; assert len(router.routes) >= 3"
+      - name: Frigate API and fresh SQLite migration smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/frigate-config" "$RUNNER_TEMP/frigate-media"
+          printf 'mqtt:\n  enabled: false\ncameras: {}\n' > "$RUNNER_TEMP/frigate-config/config.yml"
+          docker run -d --name frigate-ha-release-smoke --shm-size 256m \
+            -v "$RUNNER_TEMP/frigate-config:/config" \
+            -v "$RUNNER_TEMP/frigate-media:/media/frigate" \
+            --mount type=tmpfs,target=/tmp/cache,tmpfs-size=100000000 \
+            -p 127.0.0.1:5000:5000 "$IMAGE"
+          trap 'docker logs --tail 100 frigate-ha-release-smoke || true; docker rm -f frigate-ha-release-smoke >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5000/api/version 2>/dev/null | grep -q "$RELEASE_VERSION"; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" = 1
+          curl -fsS 'http://127.0.0.1:5000/api/vehicle_visits?camera=all' >/dev/null
+          docker exec frigate-ha-release-smoke python3 -c \
+            "import sqlite3; db=sqlite3.connect('/config/frigate.db'); tables={r[0] for r in db.execute('select name from sqlite_master where type = ?', ('table',))}; assert {'vehiclevisit','vehiclevisitevent'} <= tables, tables"
+          docker rm -f frigate-ha-release-smoke
+          trap - EXIT
+      - name: Authenticate to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: \${{ github.actor }}
+          password: \${{ secrets.GITHUB_TOKEN }}
+      - name: Publish validated image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "$IMMUTABLE"
+          docker push "$IMAGE"
+      - name: Verify anonymous HA image access before advertising update
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(curl -fsSL --retry 3 \
+            'https://ghcr.io/token?scope=repository:michlimek/frigate:pull&service=ghcr.io' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+          test -n "$TOKEN"
+          ready=0
+          for _ in 1 2 3 4 5; do
+            status="$(curl -sSL -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $TOKEN" \
+              -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json' \
+              "https://ghcr.io/v2/michlimek/frigate/manifests/$RELEASE_VERSION")"
+            if [[ "$status" == 200 ]]; then ready=1; break; fi
+            sleep 8
+          done
+          if [[ "$ready" != 1 ]]; then
+            echo "Image not anonymously pullable; refusing to expose broken HA update" >&2
+            exit 1
+          fi
+      - name: Promote version to HA add-on branch
+        env:
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Update only the lightweight HA app metadata, never source code.
+          path="frigate_ptz/config.yaml"
+          existing_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=ha-addon" --jq '.sha')"
+          encoded="$(base64 -w0 "$path")"
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/$path" \
+            -f message="Publish verified Frigate $RELEASE_VERSION to HA channel" \
+            -f branch="ha-addon" -f sha="$existing_sha" -f content="$encoded" >/dev/null
+          {
+            echo "### Home Assistant channel updated"
+            echo "Published: $IMAGE"
+            echo "Repository: https://github.com/$GITHUB_REPOSITORY#ha-addon"
+            echo "HA will see this version after repository refresh; auto-install was not enabled."
+          } >> "$GITHUB_STEP_SUMMARY"
