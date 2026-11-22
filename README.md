@@ -1,83 +1,45 @@
-<p align="center">
-  <img align="center" alt="logo" src="docs/static/img/branding/frigate.png">
-</p>
+# SimplyQ Frigate PTZ: Home Assistant app channel
 
-# Frigate NVR™ - Realtime Object Detection for IP Cameras
+This lightweight **ha-addon** branch is a Home Assistant repository. It
+contains **only app metadata**, not Frigate source code or Dockerfiles.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Add this repository to Home Assistant using the URL:
 
-<a href="https://hosted.weblate.org/engage/frigate-nvr/">
-<img src="https://hosted.weblate.org/widget/frigate-nvr/language-badge.svg" alt="Translation status" />
-</a>
+```
+https://github.com/michlimek/frigate#ha-addon
+```
 
-\[English\] | [简体中文](https://github.com/blakeblackshear/frigate/blob/dev/README_CN.md)
+The first listed version uses the previously deployed PTZ image and makes
+no changes to Frigate. The image name is
+`ghcr.io/michlimek/frigate` and its tag always equals `version`.
 
-A complete and local NVR designed for [Home Assistant](https://www.home-assistant.io) with AI object detection. Uses OpenCV and Tensorflow to perform realtime object detection locally for IP cameras.
+**No Home Assistant build is ever required.** The actual Frigate backend,
+migrations, and React frontend are built and tested on an external GitHub
+runner. Only after the new image is pushed and anonymously pullable does
+CI update `frigate_ptz/config.yaml` here. On the next store refresh HA
+shows the update with a normal Update button.
 
-Use of a GPU or AI accelerator is highly recommended. AI accelerators will outperform even the best CPUs with very little overhead. See Frigate's supported [object detectors](https://docs.frigate.video/configuration/object_detectors/).
+## Important for existing Słopnice3 installation
 
-- Tight integration with Home Assistant via a [custom component](https://github.com/blakeblackshear/frigate-hass-integration)
-- Designed to minimize resource use and maximize performance by only looking for objects when and where it is necessary
-- Leverages multiprocessing heavily with an emphasis on realtime over processing every frame
-- Uses a very low overhead motion detection to determine where to run object detection
-- Object detection with TensorFlow runs in separate processes for maximum FPS
-- Communicates over MQTT for easy integration into other systems
-- Records video with retention settings based on detected objects
-- 24/7 recording
-- Re-streaming via RTSP to reduce the number of connections to your camera
-- WebRTC & MSE support for low-latency live view
+The current app is `local_frigate-ptz`. The app installed from this
+repository receives a **different repository prefix**, even though its
+`slug` remains `frigate-ptz`. A one-time migration of `/config` data
+is therefore required. Do NOT run both instances at once and do not
+assume the Supervisor transfers the database automatically.
 
-## Documentation
+Perform a full backup of `/addon_configs/local_frigate-ptz`,
+`frigate.db`, and recordings before switching. Stop the old app first.
+Install the new app but do not start it until data have been copied from
+the old app config directory to the new app config directory.
 
-View the documentation at https://docs.frigate.video
+## Release controls
 
-## Donations
+- No source archive, Dockerfile, npm or Vite build is contained in this
+  branch.
+- Only tested, published GHCR tags may be advertised as versions.
+- No automatic installation on HA. Use manual Update.
+- Keep an immutable image SHA digest in the release notes for rollback.
+- The `ha-addon` branch must only be updated by release promotion after
+  an anonymous GHCR manifest verification. Never bump `version` first.
 
-If you would like to make a donation to support development, please use [Github Sponsors](https://github.com/sponsors/blakeblackshear).
-
-## License
-
-This project is licensed under the **MIT License**.
-
-- **Code:** The source code, configuration files, and documentation in this repository are available under the [MIT License](LICENSE). You are free to use, modify, and distribute the code as long as you include the original copyright notice.
-- **Trademarks:** The "Frigate" name, the "Frigate NVR" brand, and the Frigate logo are **trademarks of Frigate, Inc.** and are **not** covered by the MIT License.
-
-Please see our [Trademark Policy](TRADEMARK.md) for details on acceptable use of our brand assets.
-
-## Screenshots
-
-### Live dashboard
-
-<div>
-<img width="800" alt="Live dashboard" src="https://github.com/blakeblackshear/frigate/assets/569905/5e713cb9-9db5-41dc-947a-6937c3bc376e">
-</div>
-
-### Streamlined review workflow
-
-<div>
-<img width="800" alt="Streamlined review workflow" src="https://github.com/blakeblackshear/frigate/assets/569905/6fed96e8-3b18-40e5-9ddc-31e6f3c9f2ff">
-</div>
-
-### Multi-camera scrubbing
-
-<div>
-<img width="800" alt="Multi-camera scrubbing" src="https://github.com/blakeblackshear/frigate/assets/569905/d6788a15-0eeb-4427-a8d4-80b93cae3d74">
-</div>
-
-### Built-in mask and zone editor
-
-<div>
-<img width="800" alt="Built-in mask and zone editor" src="https://github.com/blakeblackshear/frigate/assets/569905/d7885fc3-bfe6-452f-b7d0-d957cb3e31f5">
-</div>
-
-## Translations
-
-We use [Weblate](https://hosted.weblate.org/projects/frigate-nvr/) to support language translations. Contributions are always welcome.
-
-<a href="https://hosted.weblate.org/engage/frigate-nvr/">
-<img src="https://hosted.weblate.org/widget/frigate-nvr/multi-auto.svg" alt="Translation status" />
-</a>
-
----
-
-**Copyright © 2026 Frigate, Inc.**
+Initial channel version: `ptz-0.18.2-3fe5164247bbe89187db248ba179ea999f700d83-amd64`.
