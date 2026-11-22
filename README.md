@@ -42,4 +42,16 @@ the old app config directory to the new app config directory.
 - The `ha-addon` branch must only be updated by release promotion after
   an anonymous GHCR manifest verification. Never bump `version` first.
 
-Initial channel version: `ptz-0.18.2-3fe5164247bbe89187db248ba179ea999f700d83-amd64`.
+## One-click add to Home Assistant
+
+Use the following Home Assistant shortcut to add this repository:
+
+https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fmichlimek%2Ffrigate%23ha-addon
+
+Adding the repository alone does **not** stop or replace your old app.
+Do not start or configure a second Frigate instance until you have a
+backup and a plan to move `app_config` data. Read the section above.
+
+Version source of truth: `frigate_ptz/config.yaml`. The `ha-addon`
+branch is updated only after the corresponding image is published and
+confirmed accessible.
