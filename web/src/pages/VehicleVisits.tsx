@@ -61,8 +61,11 @@ export default function VehicleVisits() {
         failed: number;
         more_possible: boolean;
       }>("vehicle_visits/backfill", null, { params: { camera, hours: 48, limit: 250 } });
-      setBackfillMessage(t("vehicleVisits.backfillResult", { count: response.data.processed })
-        + (response.data.more_possible ? " " + t("vehicleVisits.backfillMore") : ""));
+      setBackfillMessage(
+        t("vehicleVisits.backfillResult", { count: response.data.processed })
+        + " " + t("vehicleVisits.backfillFailures", { count: response.data.failed })
+        + (response.data.more_possible ? " " + t("vehicleVisits.backfillMore") : ""),
+      );
       await mutate();
     } catch {
       setBackfillMessage(t("vehicleVisits.backfillError"));

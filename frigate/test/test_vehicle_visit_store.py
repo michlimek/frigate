@@ -1,11 +1,14 @@
 """Persistent vehicle-visit mapping regressions."""
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from playhouse.sqlite_ext import SqliteExtDatabase
 
+from frigate.db.sqlitevecq import SqliteVecQueueDatabase
 from frigate.models import VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.matching import VehicleObservation
 from frigate.vehicle_visits.store import link_event_to_visit
@@ -42,6 +45,38 @@ class TestVehicleVisitStore(unittest.TestCase):
         self.assertEqual(self.record(self.event("a", 100)), ("a", "first_detection"))
         self.assertEqual(VehicleVisit.select().count(), 1)
         self.assertEqual(VehicleVisitEvent.get_by_id("a").visit_id, "a")
+
+    def test_new_visit_with_frigate_queued_database(self):
+        """Queue-backed SQLite cannot use get_or_create() or atomic()."""
+        with TemporaryDirectory() as directory:
+            path = str(Path(directory) / "visits.db")
+            schema_db = SqliteExtDatabase(path)
+            schema_db.bind([VehicleVisit, VehicleVisitEvent])
+            schema_db.connect()
+            schema_db.create_tables([VehicleVisit, VehicleVisitEvent])
+            schema_db.close()
+
+            queued_db = SqliteVecQueueDatabase(
+                path, load_vec_extension=False
+            )
+            queued_db.bind([VehicleVisit, VehicleVisitEvent])
+            try:
+                # Missing thumbnail still must produce the first visit.
+                first = self.event("queued-a", 100, digest=None)
+                self.assertEqual(
+                    self.record(first), ("queued-a", "first_detection")
+                )
+                self.assertEqual(
+                    VehicleVisitEvent.get_by_id("queued-a").visit_id,
+                    "queued-a",
+                )
+                self.assertEqual(VehicleVisit.select().count(), 1)
+                # Replaying the same event must not duplicate its link.
+                self.assertEqual(self.record(first)[0], "queued-a")
+                self.assertEqual(VehicleVisitEvent.select().count(), 1)
+            finally:
+                queued_db.stop()
+                self.db.bind([VehicleVisit, VehicleVisitEvent])
 
     def test_repeat_same_event_does_not_create_second_visit(self):
         self.record(self.event("a", 100))

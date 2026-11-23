@@ -174,3 +174,22 @@ stationary car reacquired after camera pan, a second similar car arriving,
 a car entering the garage, the same car leaving and returning, and camera
 restarts. No confidence metric can make an ambiguous single-frame match
 infallible.
+
+## Troubleshooting queued SQLite visit writes
+
+In 0.18.2.post2, the first visit insertion called Peewee's
+`get_or_create()`. Frigate binds the `VehicleVisit` models to
+`SqliteVecQueueDatabase`, which does not support the implicit
+`atomic()` transaction used by `get_or_create()` when the row
+does not exist. As a result, retained `car` events were visible
+in `/api/events` but Vehicle Visits remained empty and history
+import reported zero successful rows.
+
+The corrected visit insertion uses a single `INSERT OR IGNORE`
+statement and then retrieves the row by its original event ID.
+This works with queued SQLite writes without modifying the
+existing events, snapshots or recordings. The historical
+import result now shows both successful imports and failed events.
+After installing a release containing this fix, re-run
+**Import history** for the relevant camera to recover unlinked
+events from the retention window.

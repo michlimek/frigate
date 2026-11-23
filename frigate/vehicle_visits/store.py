@@ -143,21 +143,25 @@ def link_event_to_visit(event) -> tuple[str, str]:
         visit.save()
     else:
         reason = "first_detection" if not matches else "ambiguous_match"
-        visit, _ = VehicleVisit.get_or_create(
+        # Frigate uses SqliteVecQueueDatabase, whose atomic() method is
+        # unsupported. Peewee get_or_create() implicitly starts a transaction
+        # for new rows and fails before inserting any visit.
+        # INSERT OR IGNORE is atomic at the SQLite statement level and works
+        # with the queued writer; the completed write is visible on read.
+        VehicleVisit.insert(
             id=event.id,
-            defaults={
-                "camera": observation.camera,
-                "start_time": observation.start_time,
-                "last_seen": observation.end_time,
-                "reference_hash": (
-                    f"{observation.image_hash:016x}"
-                    if observation.image_hash is not None else None
-                ),
-                "reference_box": list(observation.box) if observation.box else None,
-                "license_plate": observation.license_plate,
-                "samples": [],
-            },
-        )
+            camera=observation.camera,
+            start_time=observation.start_time,
+            last_seen=observation.end_time,
+            reference_hash=(
+                f"{observation.image_hash:016x}"
+                if observation.image_hash is not None else None
+            ),
+            reference_box=list(observation.box) if observation.box else None,
+            license_plate=observation.license_plate,
+            samples=[],
+        ).on_conflict_ignore().execute()
+        visit = VehicleVisit.get_by_id(event.id)
         _update_sample(visit, observation)
         visit.save()
 

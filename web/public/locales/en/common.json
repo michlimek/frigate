@@ -347,6 +347,7 @@
     "backfillBusy": "Importing…",
     "backfillConfirm": "Import retained car detections from the last 48 hours? Original recordings will not be changed.",
     "backfillResult": "Imported {{count}} events",
+    "backfillFailures": "Failed: {{count}}",
     "backfillMore": "More history may remain; repeat the import.",
     "backfillError": "Unable to import vehicle history"
   }
