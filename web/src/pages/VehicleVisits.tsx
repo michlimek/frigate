@@ -151,7 +151,7 @@ export default function VehicleVisits() {
                       )}
                     />
                     <p className="mt-2 text-xs text-secondary-foreground">
-                      {t("vehicleVisits.playing", { index: selected + 1, count: visit.event_count })}
+                      {t("vehicleVisits.playing", { index: selected + 1, total: visit.event_count })}
                     </p>
                   </div>
                 )}

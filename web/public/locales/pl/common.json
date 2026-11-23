@@ -355,7 +355,7 @@
     "eventCount_many": "{{count}} nagrań",
     "lastSeen": "Ostatnio widziany",
     "id": "ID wizyty",
-    "playing": "Odtwarzanie {{index}} z {{count}}",
+    "playing": "Odtwarzanie {{index}} z {{total}}",
     "stop": "Zatrzymaj",
     "playAll": "Odtwórz wszystkie filmy",
     "sourceEvents": "Nagrania źródłowe",

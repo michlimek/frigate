@@ -4,12 +4,12 @@ import logging
 
 from frigate.models import VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.inspection import inspect_event
+from frigate.vehicle_visits.matching import VehicleVisit as MatchVisit
 from frigate.vehicle_visits.matching import (
     image_distance,
     intersection_over_union,
     match_reason,
 )
-from frigate.vehicle_visits.matching import VehicleVisit as MatchVisit
 
 logger = logging.getLogger(__name__)
 

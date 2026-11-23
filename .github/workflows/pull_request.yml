@@ -119,20 +119,41 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+      # Our HA fork ships a complete prebuilt 0.18.2 runtime overlay.
+      # Test against that runtime rather than rebuilding upstream Nginx,
+      # whose historical nginx-vod-module 1.31 tarball no longer exists.
+      - name: Run release regression tests in Frigate runtime
+        if: github.base_ref == 'release/0.18.2'
+        run: |
+          docker run --rm --workdir /opt/frigate --entrypoint python3 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            --mount "type=bind,src=${{ github.workspace }}/frigate,dst=/opt/frigate/frigate,readonly" \
+            ghcr.io/blakeblackshear/frigate:0.18.2 \
+            -m unittest -v \
+            frigate.test.test_vehicle_visit_matching \
+            frigate.test.test_vehicle_visit_store \
+            frigate.test.test_ptz_movement_prediction
       - uses: actions/setup-node@v6
+        if: github.base_ref != 'release/0.18.2'
         with:
           node-version: 20.x
       - name: Install devcontainer cli
+        if: github.base_ref != 'release/0.18.2'
         run: npm install --global @devcontainers/cli
       - name: Build devcontainer
+        if: github.base_ref != 'release/0.18.2'
         env:
           DOCKER_BUILDKIT: "1"
         run: devcontainer build --workspace-folder .
       - name: Start devcontainer
+        if: github.base_ref != 'release/0.18.2'
         run: devcontainer up --workspace-folder .
       - name: Run mypy in devcontainer
+        if: github.base_ref != 'release/0.18.2'
         run: devcontainer exec --workspace-folder . bash -lc "python3 -u -m mypy --config-file frigate/mypy.ini frigate"
       - name: Check API spec is up to date
+        if: github.base_ref != 'release/0.18.2'
         run: devcontainer exec --workspace-folder . bash -lc "python3 generate_api_auth_spec.py --check"
       - name: Run unit tests in devcontainer
+        if: github.base_ref != 'release/0.18.2'
         run: devcontainer exec --workspace-folder . bash -lc "python3 -u -m unittest"

@@ -337,7 +337,7 @@
     "eventCount_other": "{{count}} clips",
     "lastSeen": "Last seen",
     "id": "Visit ID",
-    "playing": "Playing {{index}} of {{count}}",
+    "playing": "Playing {{index}} of {{total}}",
     "stop": "Stop",
     "playAll": "Play all clips",
     "sourceEvents": "Source recordings",
