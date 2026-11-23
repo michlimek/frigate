@@ -47,7 +47,7 @@ if [ "$status" != "200" ]; then
   exit 1
 fi
 
-backup="$config.bak-before-prebuilt-post2"
+backup="$config.bak-before-prebuilt-post3"
 if [ -e "$backup" ]; then
   echo "Backup already exists: $backup; refusing overwrite" >&2
   exit 1
