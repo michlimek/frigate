@@ -21,15 +21,19 @@ def _samples(visit: VehicleVisit) -> list[dict]:
     """Read valid appearance references without altering the Peewee model."""
     rows = list(visit.samples or [])
     if not rows and visit.reference_hash and visit.reference_box:
-        rows.append({
-            "hash": visit.reference_hash,
-            "box": visit.reference_box,
-            "event_id": visit.id,
-        })
+        rows.append(
+            {
+                "hash": visit.reference_hash,
+                "box": visit.reference_box,
+                "event_id": visit.id,
+            }
+        )
     return rows
 
 
-def _matching_signatures(visit: VehicleVisit, observation) -> tuple[str, int, float] | None:
+def _matching_signatures(
+    visit: VehicleVisit, observation
+) -> tuple[str, int, float] | None:
     """Look at bounded same-visit viewpoints, not rolling unrelated matches."""
     matches = []
     for sample in _samples(visit):
@@ -73,14 +77,16 @@ def _update_sample(visit: VehicleVisit, observation) -> bool:
                 return False
         except (ValueError, TypeError, KeyError):
             continue
-    rows.append({
-        "hash": new_hash,
-        "box": list(observation.box),
-        "event_id": observation.event_id,
-    })
+    rows.append(
+        {
+            "hash": new_hash,
+            "box": list(observation.box),
+            "event_id": observation.event_id,
+        }
+    )
     # Keep the original anchor. Drop intermediate signatures before newest.
     if len(rows) > MAX_SAMPLES:
-        rows = [rows[0], *rows[-(MAX_SAMPLES - 1):]]
+        rows = [rows[0], *rows[-(MAX_SAMPLES - 1) :]]
     visit.samples = rows
     if not visit.reference_hash:
         visit.reference_hash = new_hash
@@ -155,7 +161,8 @@ def link_event_to_visit(event) -> tuple[str, str]:
             last_seen=observation.end_time,
             reference_hash=(
                 f"{observation.image_hash:016x}"
-                if observation.image_hash is not None else None
+                if observation.image_hash is not None
+                else None
             ),
             reference_box=list(observation.box) if observation.box else None,
             license_plate=observation.license_plate,
@@ -173,7 +180,9 @@ def link_event_to_visit(event) -> tuple[str, str]:
     ).on_conflict_replace().execute()
     logger.debug(
         "Vehicle event %s assigned to visit %s (%s)",
-        event.id, visit.id, reason,
+        event.id,
+        visit.id,
+        reason,
     )
     return visit.id, reason
 

@@ -39,7 +39,9 @@ def image_hash(image_bytes: bytes | None) -> int | None:
     """Compute the same 64-bit grayscale dHash used by visit matching."""
     if not image_bytes:
         return None
-    image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+    image = cv2.imdecode(
+        np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_GRAYSCALE
+    )
     if image is None:
         return None
     small = cv2.resize(image, (9, 8), interpolation=cv2.INTER_AREA)

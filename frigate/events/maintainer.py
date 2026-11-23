@@ -298,7 +298,8 @@ class EventProcessor(threading.Thread):
                 and (
                     event_type == EventStateEnum.end
                     or time.monotonic()
-                    - self._visit_sync_at.get(event_data["id"], float("-inf")) >= 20.0
+                    - self._visit_sync_at.get(event_data["id"], float("-inf"))
+                    >= 20.0
                 )
             ):
                 # Thumbnail decoding is expensive. Sample at most every 20s
