@@ -8,8 +8,8 @@ from frigate.vehicle_visits.matching import (
     image_distance,
     intersection_over_union,
     match_reason,
-    VehicleVisit as MatchVisit,
 )
+from frigate.vehicle_visits.matching import VehicleVisit as MatchVisit
 
 logger = logging.getLogger(__name__)
 

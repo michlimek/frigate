@@ -48,7 +48,6 @@ from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import LiteralScalarString
 
 from frigate.api import (
-    app as main_app,
     auth,
     camera,
     chat,
@@ -65,6 +64,7 @@ from frigate.api import (
     vehicle_visits_preview,
     vehicle_visits,
 )
+from frigate.api import app as main_app
 from frigate.api.auth import require_admin_by_default
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")

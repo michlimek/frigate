@@ -13,7 +13,6 @@ from starlette_context import middleware, plugins
 from starlette_context.plugins import Plugin
 
 from frigate.api import (
-    app as main_app,
     auth,
     camera,
     chat,
@@ -30,6 +29,7 @@ from frigate.api import (
     vehicle_visits_preview,
     vehicle_visits,
 )
+from frigate.api import app as main_app
 from frigate.api.auth import get_jwt_secret, limiter, require_admin_by_default
 from frigate.comms.dispatcher import Dispatcher
 from frigate.comms.event_metadata_updater import (
