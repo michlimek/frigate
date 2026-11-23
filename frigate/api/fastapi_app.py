@@ -12,8 +12,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette_context import middleware, plugins
 from starlette_context.plugins import Plugin
 
-from frigate.api import app as main_app
 from frigate.api import (
+    app as main_app,
     auth,
     camera,
     chat,

@@ -364,8 +364,8 @@
     "backfill": "Importuj historię",
     "backfillBusy": "Importowanie…",
     "backfillConfirm": "Zaimportować zachowane wykrycia aut z ostatnich 48 godzin? Oryginalne nagrania nie zostaną zmienione.",
-    "backfillResult": "Zaimportowano {{count}} zdarzeń",
-    "backfillFailures": "Niepowodzenia: {{count}}",
+    "backfillResult": "Zaimportowano zdarzenia: {{processed}}",
+    "backfillFailures": "Niepowodzenia: {{failed}}",
     "backfillMore": "Mogą pozostać kolejne zdarzenia; ponów import.",
     "backfillError": "Nie udało się zaimportować historii"
   }

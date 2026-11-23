@@ -1,9 +1,9 @@
 """Persistent vehicle-visit mapping regressions."""
 
+import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-import unittest
 from unittest.mock import patch
 
 from playhouse.sqlite_ext import SqliteExtDatabase

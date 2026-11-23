@@ -62,8 +62,8 @@ export default function VehicleVisits() {
         more_possible: boolean;
       }>("vehicle_visits/backfill", null, { params: { camera, hours: 48, limit: 250 } });
       setBackfillMessage(
-        t("vehicleVisits.backfillResult", { count: response.data.processed })
-        + " " + t("vehicleVisits.backfillFailures", { count: response.data.failed })
+        t("vehicleVisits.backfillResult", { processed: response.data.processed })
+        + " " + t("vehicleVisits.backfillFailures", { failed: response.data.failed })
         + (response.data.more_possible ? " " + t("vehicleVisits.backfillMore") : ""),
       );
       await mutate();

@@ -14,7 +14,7 @@ from frigate.api.auth import (
 )
 from frigate.models import Event, VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.inspection import event_timestamp
-from frigate.vehicle_visits.store import linked_events_for_visit, link_event_to_visit
+from frigate.vehicle_visits.store import link_event_to_visit, linked_events_for_visit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["vehicle-visits"])

@@ -47,8 +47,8 @@ from fastapi.routing import APIRoute
 from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import LiteralScalarString
 
-from frigate.api import app as main_app
 from frigate.api import (
+    app as main_app,
     auth,
     camera,
     chat,
