@@ -28,7 +28,11 @@ jobs:
         run: npm run lint
         working-directory: ./web
       - name: Check i18n keys
-        run: npm run i18n:extract:ci
+        run: |
+          if ! npm run i18n:extract:ci; then
+            git diff -- public/locales/en/common.json
+            exit 1
+          fi
         working-directory: ./web
 
   web_test:
@@ -102,7 +106,10 @@ jobs:
           ruff format --check --diff frigate migrations docker *.py
       - name: Check lint
         run: |
-          ruff check frigate migrations docker *.py
+          if ! ruff check frigate migrations docker *.py; then
+            ruff check --diff frigate migrations docker *.py
+            exit 1
+          fi
 
   python_tests:
     runs-on: ubuntu-latest
