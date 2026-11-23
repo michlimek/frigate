@@ -84,61 +84,71 @@ to its earlier local matching rather than losing all arrival alerts.
 The new feature does not change Frigate's native MQTT `frigate/events`
 payload. Existing consumers remain compatible.
 
-## Installable image (SimplyQ 0.18.2.post1)
+## Installable image: SimplyQ 0.18.2.post3
 
-This repository has a dedicated AMD64 image build workflow for the full
-Frigate backend, migrations and web frontend (not the older PTZ-only
-overlay). It is built from `docker/main/Dockerfile`, and is pushed to
-GHCR **only after** the container tests and API smoke test pass.
+Frigate 0.18.2.post1 failed to build locally on Home Assistant Słopnice3.
+Node/Vite reached the approximately 2 GiB V8 heap limit and aborted during
+`npm run build`. This source-building add-on must not be retried.
 
-Image after a successful publish:
+The new **external-only** Dockerfile
+`docker/ptz-vehicle-visits-release.Dockerfile` uses
+`NODE_OPTIONS=--max-old-space-size=4096` on an external build machine,
+copies the complete fork backend, migrations and compiled web UI onto the
+official Frigate 0.18.2 runtime, and keeps the old PTZ fixes.
 
-```yaml
-image: ghcr.io/michlimek/frigate:0.18.2.post1-amd64
-```
-
-An immutable tag `0.18.2.post1-<commit-sha7>-amd64` is published in
-addition to the version tag. Check the GitHub Actions workflow run and
-GHCR package before pulling: a code merge alone does not publish an
-image. The old `ptz-0.18.2-test-amd64` image **does not contain**
-vehicle-visit code or frontend, because its Dockerfile copies only
-`frigate/ptz/autotrack.py`.
-
-### Home Assistant add-on upgrade
-
-Home Assistant Supervisor pulls the `image` setting with the exact
-`version` as the Docker image tag. For add-on installations, this release
-therefore also publishes `ghcr.io/michlimek/frigate:0.18.2.post1`.
-
-The add-on's original `config.yaml` needs this change in the **source
-manifest**, not the add-on Options tab:
+The new HA add-on has **no Dockerfile** and only pulls:
 
 ```yaml
-version: "0.18.2.post1"
+slug: frigate-ptz
+version: "0.18.2.post3"
 image: ghcr.io/michlimek/frigate
 ```
 
-**Retain the existing `slug`, mounts, hardware permissions, network ports,
-ingress and settings** for an in-place upgrade. Changing the add-on slug or
-repository identifier makes Home Assistant treat it as a different add-on,
-which requires migrating `config.yml` and other add-on-scoped data.
-For official `ccab4aaf_frigate`, a third-party manifest cannot silently
-replace the upstream add-on, which is owned by the Frigate add-ons
-repository. The custom "Frigate 0.18.2 PTZ Fix" add-on should be updated in
-its own add-on source repository or locally in `addons/local` if it is a
-local add-on. Refresh the Add-on Store after updating its manifest.
+The image reference used by HA Supervisor will be:
+`ghcr.io/michlimek/frigate:0.18.2.post3`.
 
-The image must be published and publicly pullable *before* refreshing or
-upgrading in Home Assistant. Do not attempt this in-place upgrade until the
-GitHub Actions publishing run succeeds, and back up the add-on configuration
-and database first.
+This image is **not available merely because the version was committed**.
+External CI must pass the unit tests, compiled frontend check, Frigate API
+startup and SQLite migration smoke test, publish the image to GHCR, and
+ensure that it can be pulled without authentication before the add-on is
+upgraded. No image should be published when tests fail.
 
-Before replacing a running Frigate instance, back up its `/config`
-directory (especially `frigate.db`) and record your current image tag.
-Version 0.18.2.post1 adds a SQLite migration; switching the container
-image back to a prior version does not reverse a completed database
-migration. Do not enable Driveway Guard visit-ID suppression until
-your real PTZ events have been checked for incorrect visit grouping.
+### Existing local HA add-on: `local_frigate-ptz`
+
+Keep the exact current add-on slug and installation; do not install a
+second Frigate. To undo the failed 0.18.2.post1 attempt, use
+`frigate_ptz/restore-local-stable.sh` in the **existing local add-on
+folder** (with the original `config.yaml.bak-before-0.18.2.post1`).
+This safely restores the old prebuilt image configuration, preserving a
+copy of the failed manifest.
+
+When (and only when) GHCR reports the new image is publicly pullable,
+copy `frigate_ptz/upgrade-local-prebuilt.sh` to that same folder and run
+it. The script validates anonymous access to the exact GHCR manifest,
+preserves the existing slug, maps, devices, ports and user settings, creates
+a backup, then updates only `version` and `image`. It refuses to
+change files if the image is missing. Refresh the local add-ons store,
+then update the existing add-on.
+
+The old `frigate_ptz/upgrade-local.sh` which removes the `image` field
+and triggers local Docker compilation must never be used again.
+
+### External build without GitHub Actions
+
+On an AMD64 Linux workstation or an x86-64 PC running Docker Desktop/WSL2
+and Git, check out the post3 candidate (before merge) or release source
+(after merge) and run
+`testing-scripts/release-frigate-prebuilt-amd64.sh`. It tests locally and
+does not publish by default. When validated and authenticated to GHCR,
+re-run with `PUBLISH=1` to publish.
+
+Before the first start of this new version, independently back up
+`/config/frigate.db`, Frigate configuration and recordings. An image
+rollback cannot reverse a completed SQLite migration.
+
+Keep Driveway Guard `frigate_vehicle_visits` **disabled** until the
+camera PTZ behavior and separate arrivals have been validated on the
+installed version.
 
 ## Validation
 
@@ -164,3 +174,22 @@ stationary car reacquired after camera pan, a second similar car arriving,
 a car entering the garage, the same car leaving and returning, and camera
 restarts. No confidence metric can make an ambiguous single-frame match
 infallible.
+
+## Troubleshooting queued SQLite visit writes
+
+In 0.18.2.post2, the first visit insertion called Peewee's
+`get_or_create()`. Frigate binds the `VehicleVisit` models to
+`SqliteVecQueueDatabase`, which does not support the implicit
+`atomic()` transaction used by `get_or_create()` when the row
+does not exist. As a result, retained `car` events were visible
+in `/api/events` but Vehicle Visits remained empty and history
+import reported zero successful rows.
+
+The corrected visit insertion uses a single `INSERT OR IGNORE`
+statement and then retrieves the row by its original event ID.
+This works with queued SQLite writes without modifying the
+existing events, snapshots or recordings. The historical
+import result now shows both successful imports and failed events.
+After installing a release containing this fix, re-run
+**Import history** for the relevant camera to recover unlinked
+events from the retention window.

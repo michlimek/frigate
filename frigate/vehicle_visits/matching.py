@@ -118,7 +118,11 @@ def group_vehicle_events(events: list[VehicleObservation]) -> list[VehicleVisit]
         for group in reversed(groups):
             reason = match_reason(group, event)
             if reason:
-                rank = {"stationary_visual_match": 3, "recent_visual_match": 2, "plate_and_visual_match": 1}[reason]
+                rank = {
+                    "stationary_visual_match": 3,
+                    "recent_visual_match": 2,
+                    "plate_and_visual_match": 1,
+                }[reason]
                 if best is None or rank > best[0]:
                     best = (rank, group, reason)
         if best is None:

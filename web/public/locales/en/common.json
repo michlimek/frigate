@@ -337,7 +337,7 @@
     "eventCount_other": "{{count}} clips",
     "lastSeen": "Last seen",
     "id": "Visit ID",
-    "playing": "Playing {{index}} of {{count}}",
+    "playing": "Playing {{index}} of {{total}}",
     "stop": "Stop",
     "playAll": "Play all clips",
     "sourceEvents": "Source recordings",
@@ -346,7 +346,8 @@
     "backfill": "Import history",
     "backfillBusy": "Importing…",
     "backfillConfirm": "Import retained car detections from the last 48 hours? Original recordings will not be changed.",
-    "backfillResult": "Imported {{count}} events",
+    "backfillResult": "Imported events: {{processed}}",
+    "backfillFailures": "Failed: {{failed}}",
     "backfillMore": "More history may remain; repeat the import.",
     "backfillError": "Unable to import vehicle history"
   }

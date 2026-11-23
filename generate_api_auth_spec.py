@@ -62,8 +62,8 @@ from frigate.api import (
     preview,
     record,
     review,
-    vehicle_visits_preview,
     vehicle_visits,
+    vehicle_visits_preview,
 )
 from frigate.api.auth import require_admin_by_default
 

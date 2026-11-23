@@ -14,7 +14,7 @@ from frigate.api.auth import (
 )
 from frigate.models import Event, VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.inspection import event_timestamp
-from frigate.vehicle_visits.store import linked_events_for_visit, link_event_to_visit
+from frigate.vehicle_visits.store import link_event_to_visit, linked_events_for_visit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["vehicle-visits"])
@@ -37,10 +37,7 @@ def vehicle_visits(
     cutoff = (datetime.now(UTC) - timedelta(hours=hours)).timestamp()
     visits = list(
         VehicleVisit.select()
-        .where(
-            (VehicleVisit.camera << cameras)
-            & (VehicleVisit.last_seen >= cutoff)
-        )
+        .where((VehicleVisit.camera << cameras) & (VehicleVisit.last_seen >= cutoff))
         .order_by(VehicleVisit.last_seen.desc())
         .limit(limit)
     )
@@ -54,46 +51,47 @@ def vehicle_visits(
             item.id: item
             for item in Event.select(
                 Event.id, Event.camera, Event.start_time, Event.end_time
-            ).where(
-                (Event.id << event_ids) & (Event.camera == visit.camera)
-            )
+            ).where((Event.id << event_ids) & (Event.camera == visit.camera))
         }
         sources = []
         for link in links:
             event = events.get(link.event_id)
             if event is None:
                 continue
-            sources.append({
-                "event_id": link.event_id,
-                "start_time": event_timestamp(event.start_time),
-                "end_time": (
-                    event_timestamp(event.end_time)
-                    if event.end_time is not None else None
-                ),
-                "match_reason": link.match_reason,
-                "thumbnail_url": (
-                    f"/api/events/{quote(link.event_id, safe='')}/thumbnail.webp"
-                ),
-            })
+            sources.append(
+                {
+                    "event_id": link.event_id,
+                    "start_time": event_timestamp(event.start_time),
+                    "end_time": (
+                        event_timestamp(event.end_time)
+                        if event.end_time is not None
+                        else None
+                    ),
+                    "match_reason": link.match_reason,
+                    "thumbnail_url": (
+                        f"/api/events/{quote(link.event_id, safe='')}/thumbnail.webp"
+                    ),
+                }
+            )
         if not sources:
             continue
-        result.append({
-            "visit_id": visit.id,
-            "camera": visit.camera,
-            "start_time": visit.start_time,
-            "last_seen": visit.last_seen,
-            "event_count": len(sources),
-            "event_ids": [item["event_id"] for item in sources],
-            "events": sources,
-            "first_thumbnail_url": sources[0]["thumbnail_url"],
-            "grouping_mode": "persistent_conservative",
-        })
+        result.append(
+            {
+                "visit_id": visit.id,
+                "camera": visit.camera,
+                "start_time": visit.start_time,
+                "last_seen": visit.last_seen,
+                "event_count": len(sources),
+                "event_ids": [item["event_id"] for item in sources],
+                "events": sources,
+                "first_thumbnail_url": sources[0]["thumbnail_url"],
+                "grouping_mode": "persistent_conservative",
+            }
+        )
     return result
 
 
-@router.get(
-    "/vehicle_visits/lookup", dependencies=[Depends(allow_any_authenticated())]
-)
+@router.get("/vehicle_visits/lookup", dependencies=[Depends(allow_any_authenticated())])
 def lookup_vehicle_visit(
     camera: str,
     event_id: str,
@@ -105,14 +103,11 @@ def lookup_vehicle_visit(
     event = Event.get_or_none((Event.id == event_id) & (Event.camera == camera))
     if event is None:
         return JSONResponse(content={}, status_code=404)
-    link = VehicleVisitEvent.get_or_none(
-        VehicleVisitEvent.event_id == event_id
-    )
+    link = VehicleVisitEvent.get_or_none(VehicleVisitEvent.event_id == event_id)
     if link is None:
         return JSONResponse(content={}, status_code=404)
     visit = VehicleVisit.get_or_none(
-        (VehicleVisit.id == link.visit_id)
-        & (VehicleVisit.camera == camera)
+        (VehicleVisit.id == link.visit_id) & (VehicleVisit.camera == camera)
     )
     if visit is None:
         return JSONResponse(content={}, status_code=404)
@@ -150,9 +145,7 @@ def backfill_vehicle_visits(
             (Event.camera == camera)
             & (Event.label == "car")
             & (Event.start_time >= cutoff)
-            & (Event.id.not_in(
-                VehicleVisitEvent.select(VehicleVisitEvent.event_id)
-            ))
+            & (Event.id.not_in(VehicleVisitEvent.select(VehicleVisitEvent.event_id)))
         )
         .order_by(Event.start_time.asc())
         .limit(limit)

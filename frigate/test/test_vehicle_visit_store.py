@@ -1,11 +1,14 @@
 """Persistent vehicle-visit mapping regressions."""
 
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from playhouse.sqlite_ext import SqliteExtDatabase
 
+from frigate.db.sqlitevecq import SqliteVecQueueDatabase
 from frigate.models import VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.matching import VehicleObservation
 from frigate.vehicle_visits.store import link_event_to_visit
@@ -24,12 +27,24 @@ class TestVehicleVisitStore(unittest.TestCase):
         self.db.drop_tables([VehicleVisitEvent, VehicleVisit])
         self.db.close()
 
-    def event(self, eid, at, digest=0x33CC001122334455, box=None, camera="obrotowa", plate=None):
+    def event(
+        self,
+        eid,
+        at,
+        digest=0x33CC001122334455,
+        box=None,
+        camera="obrotowa",
+        plate=None,
+    ):
         record = SimpleNamespace(id=eid, label="car")
         obs = VehicleObservation(
-            event_id=eid, camera=camera, start_time=at, end_time=at + 4,
+            event_id=eid,
+            camera=camera,
+            start_time=at,
+            end_time=at + 4,
             box=self.BOX if box is None else box,
-            image_hash=digest, license_plate=plate,
+            image_hash=digest,
+            license_plate=plate,
         )
         return record, obs
 
@@ -42,6 +57,34 @@ class TestVehicleVisitStore(unittest.TestCase):
         self.assertEqual(self.record(self.event("a", 100)), ("a", "first_detection"))
         self.assertEqual(VehicleVisit.select().count(), 1)
         self.assertEqual(VehicleVisitEvent.get_by_id("a").visit_id, "a")
+
+    def test_new_visit_with_frigate_queued_database(self):
+        """Queue-backed SQLite cannot use get_or_create() or atomic()."""
+        with TemporaryDirectory() as directory:
+            path = str(Path(directory) / "visits.db")
+            schema_db = SqliteExtDatabase(path)
+            schema_db.bind([VehicleVisit, VehicleVisitEvent])
+            schema_db.connect()
+            schema_db.create_tables([VehicleVisit, VehicleVisitEvent])
+            schema_db.close()
+
+            queued_db = SqliteVecQueueDatabase(path, load_vec_extension=False)
+            queued_db.bind([VehicleVisit, VehicleVisitEvent])
+            try:
+                # Missing thumbnail still must produce the first visit.
+                first = self.event("queued-a", 100, digest=None)
+                self.assertEqual(self.record(first), ("queued-a", "first_detection"))
+                self.assertEqual(
+                    VehicleVisitEvent.get_by_id("queued-a").visit_id,
+                    "queued-a",
+                )
+                self.assertEqual(VehicleVisit.select().count(), 1)
+                # Replaying the same event must not duplicate its link.
+                self.assertEqual(self.record(first)[0], "queued-a")
+                self.assertEqual(VehicleVisitEvent.select().count(), 1)
+            finally:
+                queued_db.stop()
+                self.db.bind([VehicleVisit, VehicleVisitEvent])
 
     def test_repeat_same_event_does_not_create_second_visit(self):
         self.record(self.event("a", 100))
@@ -57,7 +100,9 @@ class TestVehicleVisitStore(unittest.TestCase):
 
     def test_second_car_at_other_position_stays_separate(self):
         self.record(self.event("a", 100))
-        self.assertEqual(self.record(self.event("b", 110, box=(0.72, 0.2, 0.95, 0.7)))[0], "b")
+        self.assertEqual(
+            self.record(self.event("b", 110, box=(0.72, 0.2, 0.95, 0.7)))[0], "b"
+        )
         self.assertEqual(VehicleVisit.select().count(), 2)
 
     def test_different_plate_never_joins(self):
@@ -66,10 +111,17 @@ class TestVehicleVisitStore(unittest.TestCase):
 
     def test_new_view_of_same_track_is_retained_for_later_matches(self):
         self.record(self.event("a", 100, digest=0x33CC001122334455))
-        self.record(self.event("a", 100, digest=0xAA55110022334455, box=(0.4, 0.1, 0.8, 0.6)))
-        self.assertEqual(self.record(self.event(
-            "b", 200, digest=0xAA55110022334455, box=(0.4, 0.1, 0.8, 0.6)
-        ))[0], "a")
+        self.record(
+            self.event("a", 100, digest=0xAA55110022334455, box=(0.4, 0.1, 0.8, 0.6))
+        )
+        self.assertEqual(
+            self.record(
+                self.event(
+                    "b", 200, digest=0xAA55110022334455, box=(0.4, 0.1, 0.8, 0.6)
+                )
+            )[0],
+            "a",
+        )
         self.assertEqual(VehicleVisit.select().count(), 1)
 
     def test_missing_image_does_not_implicitly_join(self):
@@ -88,7 +140,7 @@ class TestVehicleVisitStore(unittest.TestCase):
 
     def test_twelve_hour_gap_starts_new_visit(self):
         self.record(self.event("a", 100))
-        self.assertEqual(self.record(self.event("b", 100 + 12*3600 + 50))[0], "b")
+        self.assertEqual(self.record(self.event("b", 100 + 12 * 3600 + 50))[0], "b")
 
     def test_mapping_survives_reinitializing_service(self):
         self.record(self.event("a", 100))

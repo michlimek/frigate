@@ -1,5 +1,6 @@
 """Add durable vehicle visits and original event links."""
 
+
 def migrate(migrator, database, fake=False, **kwargs):
     migrator.sql("""
         CREATE TABLE IF NOT EXISTS vehiclevisit (
@@ -29,6 +30,7 @@ def migrate(migrator, database, fake=False, **kwargs):
         "CREATE INDEX IF NOT EXISTS vehiclevisitevent_visit_id "
         "ON vehiclevisitevent (visit_id)"
     )
+
 
 def rollback(migrator, database, fake=False, **kwargs):
     migrator.sql("DROP TABLE IF EXISTS vehiclevisitevent")

@@ -355,7 +355,7 @@
     "eventCount_many": "{{count}} nagrań",
     "lastSeen": "Ostatnio widziany",
     "id": "ID wizyty",
-    "playing": "Odtwarzanie {{index}} z {{count}}",
+    "playing": "Odtwarzanie {{index}} z {{total}}",
     "stop": "Zatrzymaj",
     "playAll": "Odtwórz wszystkie filmy",
     "sourceEvents": "Nagrania źródłowe",
@@ -364,7 +364,8 @@
     "backfill": "Importuj historię",
     "backfillBusy": "Importowanie…",
     "backfillConfirm": "Zaimportować zachowane wykrycia aut z ostatnich 48 godzin? Oryginalne nagrania nie zostaną zmienione.",
-    "backfillResult": "Zaimportowano {{count}} zdarzeń",
+    "backfillResult": "Zaimportowano zdarzenia: {{processed}}",
+    "backfillFailures": "Niepowodzenia: {{failed}}",
     "backfillMore": "Mogą pozostać kolejne zdarzenia; ponów import.",
     "backfillError": "Nie udało się zaimportować historii"
   }

@@ -27,8 +27,8 @@ from frigate.api import (
     preview,
     record,
     review,
-    vehicle_visits_preview,
     vehicle_visits,
+    vehicle_visits_preview,
 )
 from frigate.api.auth import get_jwt_secret, limiter, require_admin_by_default
 from frigate.comms.dispatcher import Dispatcher
