@@ -1,4 +1,4 @@
-name: SimplyQ Frigate 0.18.2.post2 AMD64 image
+name: SimplyQ Frigate 0.18.2.post3 AMD64 image
 
 on:
   workflow_dispatch:
@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '^image: ghcr.io/michlimek/frigate$' frigate_ptz/config.yaml
-          grep -q '^version: "0.18.2.post2"$' frigate_ptz/config.yaml
+          grep -q '^version: "0.18.2.post3"$' frigate_ptz/config.yaml
           test ! -e frigate_ptz/Dockerfile
 
       - name: Generate version and frontend build metadata

@@ -1,6 +1,9 @@
 # Frigate PTZ Fix - safe prebuilt-image release
 
-Version: **0.18.2.post2** (AMD64).
+Version: **0.18.2.post3** (AMD64).
+
+This release fixes the queued SQLite visit insertion regression in post2.
+Retained car detections can be imported again from Vehicle Visits.
 
 ## Why local source building is disabled
 
@@ -13,19 +16,19 @@ The new add-on definition has **no local Dockerfile** and uses:
 
 ```yaml
 slug: frigate-ptz
-version: "0.18.2.post2"
+version: "0.18.2.post3"
 image: ghcr.io/michlimek/frigate
 ```
 
 Home Assistant only pulls an **already built** image with exact tag
-`ghcr.io/michlimek/frigate:0.18.2.post2`. The image must exist and be
+`ghcr.io/michlimek/frigate:0.18.2.post3`. The image must exist and be
 anonymously pullable in GHCR. A GitHub commit or version bump alone does not
 publish that image.
 
 ## Build and publish on an external computer / CI
 
 For the initial pre-merge test use candidate branch
-`fix/ha-ptz-prebuilt-only-0.18.2.post2`; after promotion use
+`fix/vehicle-visits-sqlite-queue-backfill`; after promotion use
 `release/0.18.2`. Build with
 `docker/ptz-vehicle-visits-release.Dockerfile` on an AMD64 host with enough
 RAM, not on a Home Assistant device. The release workflow builds the web UI
@@ -49,13 +52,13 @@ run the same build and tests, then publish to GHCR using an account with
 4. Reload the local add-on repository in the Home Assistant Store. Do not
    install a second Frigate instance.
 
-**Upgrade when 0.18.2.post2 image is actually published:**
+**Upgrade when 0.18.2.post3 image is actually published:**
 
 1. Verify the external CI/build and that GHCR image is public.
 2. Copy `upgrade-local-prebuilt.sh` to your **existing** local add-on folder.
 3. Run it from that folder. It will refuse to change the manifest unless it
    successfully downloads an anonymous pull token and resolves the exact
-   `0.18.2.post2` manifest (HTTP 200).
+   `0.18.2.post3` manifest (HTTP 200).
 4. Reload the local add-on store, update the existing PTZ Fix add-on, and
    verify live cameras, storage, PTZ, and vehicle-visits pages.
 5. Keep Driveway Guard `frigate_vehicle_visits` disabled until actual

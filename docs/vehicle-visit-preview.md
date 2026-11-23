@@ -84,7 +84,7 @@ to its earlier local matching rather than losing all arrival alerts.
 The new feature does not change Frigate's native MQTT `frigate/events`
 payload. Existing consumers remain compatible.
 
-## Installable image: SimplyQ 0.18.2.post2
+## Installable image: SimplyQ 0.18.2.post3
 
 Frigate 0.18.2.post1 failed to build locally on Home Assistant Słopnice3.
 Node/Vite reached the approximately 2 GiB V8 heap limit and aborted during
@@ -100,12 +100,12 @@ The new HA add-on has **no Dockerfile** and only pulls:
 
 ```yaml
 slug: frigate-ptz
-version: "0.18.2.post2"
+version: "0.18.2.post3"
 image: ghcr.io/michlimek/frigate
 ```
 
 The image reference used by HA Supervisor will be:
-`ghcr.io/michlimek/frigate:0.18.2.post2`.
+`ghcr.io/michlimek/frigate:0.18.2.post3`.
 
 This image is **not available merely because the version was committed**.
 External CI must pass the unit tests, compiled frontend check, Frigate API
@@ -136,7 +136,7 @@ and triggers local Docker compilation must never be used again.
 ### External build without GitHub Actions
 
 On an AMD64 Linux workstation or an x86-64 PC running Docker Desktop/WSL2
-and Git, check out the post2 candidate (before merge) or release source
+and Git, check out the post3 candidate (before merge) or release source
 (after merge) and run
 `testing-scripts/release-frigate-prebuilt-amd64.sh`. It tests locally and
 does not publish by default. When validated and authenticated to GHCR,

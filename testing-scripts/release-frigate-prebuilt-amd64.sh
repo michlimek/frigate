@@ -14,7 +14,7 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 branch="$(git symbolic-ref --short HEAD)"
 case "$branch" in
-  release/0.18.2|fix/ha-ptz-prebuilt-only-0.18.2.post2) ;;
+  release/0.18.2|fix/vehicle-visits-sqlite-queue-backfill) ;;
   *)
     echo "Build only the reviewed post2 release or candidate branch; got $branch" >&2
     exit 1

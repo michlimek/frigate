@@ -4,7 +4,7 @@
 set -eu
 addon_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 config="$addon_dir/config.yaml"
-version="0.18.2.post2"
+version="0.18.2.post3"
 registry="ghcr.io"
 image="ghcr.io/michlimek/frigate"
 
@@ -58,7 +58,7 @@ if ! grep -Eq '^version:[[:space:]]*' "$config"; then
 fi
 
 cp "$config" "$backup"
-sed -e 's/^version:.*/version: "0.18.2.post2"/' \
+sed -e 's/^version:.*/version: "0.18.2.post3"/' \
     -e '/^image:[[:space:]]*/d' "$backup" > "$config.tmp"
 printf '\nimage: %s\n' "$image" >> "$config.tmp"
 mv "$config.tmp" "$config"
