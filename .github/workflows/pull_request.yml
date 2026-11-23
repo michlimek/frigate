@@ -122,6 +122,9 @@ jobs:
       # Our HA fork ships a complete prebuilt 0.18.2 runtime overlay.
       # Test against that runtime rather than rebuilding upstream Nginx,
       # whose historical nginx-vod-module 1.31 tarball no longer exists.
+      - name: Generate Frigate release version metadata
+        if: github.base_ref == 'release/0.18.2'
+        run: make version
       - name: Run release regression tests in Frigate runtime
         if: github.base_ref == 'release/0.18.2'
         run: |
