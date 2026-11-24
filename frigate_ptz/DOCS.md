@@ -1,9 +1,16 @@
 # Frigate PTZ Fix - safe prebuilt-image release
 
-Version: **0.18.2.post3** (AMD64).
+Version: **0.18.2.post4** (AMD64).
 
-This release fixes the queued SQLite visit insertion regression in post2.
-Retained car detections can be imported again from Vehicle Visits.
+This release groups vehicle recordings in native Review and Explore, supports manual corrections and explicit departure, and preserves source events.
+
+## Existing GitHub add-on
+
+Keep `https://github.com/michlimek/frigate#ha-addon` and update the existing
+`frigate-ptz` add-on through the HA store after verified promotion. Do not add
+the release source branch as a second repository. Back up `frigate.db` before
+installing the migration. The release runner publishes the prebuilt image and
+only then updates the existing stable channel after an anonymous pull check.
 
 ## Why local source building is disabled
 
@@ -16,19 +23,19 @@ The new add-on definition has **no local Dockerfile** and uses:
 
 ```yaml
 slug: frigate-ptz
-version: "0.18.2.post3"
+version: "0.18.2.post4"
 image: ghcr.io/michlimek/frigate
 ```
 
 Home Assistant only pulls an **already built** image with exact tag
-`ghcr.io/michlimek/frigate:0.18.2.post3`. The image must exist and be
+`ghcr.io/michlimek/frigate:0.18.2.post4`. The image must exist and be
 anonymously pullable in GHCR. A GitHub commit or version bump alone does not
 publish that image.
 
 ## Build and publish on an external computer / CI
 
 For the initial pre-merge test use candidate branch
-`fix/vehicle-visits-sqlite-queue-backfill`; after promotion use
+`feature/group-vehicles-in-review`; after promotion use
 `release/0.18.2`. Build with
 `docker/ptz-vehicle-visits-release.Dockerfile` on an AMD64 host with enough
 RAM, not on a Home Assistant device. The release workflow builds the web UI
@@ -52,15 +59,15 @@ run the same build and tests, then publish to GHCR using an account with
 4. Reload the local add-on repository in the Home Assistant Store. Do not
    install a second Frigate instance.
 
-**Upgrade when 0.18.2.post3 image is actually published:**
+**Upgrade when 0.18.2.post4 image is actually published:**
 
 1. Verify the external CI/build and that GHCR image is public.
 2. Copy `upgrade-local-prebuilt.sh` to your **existing** local add-on folder.
 3. Run it from that folder. It will refuse to change the manifest unless it
    successfully downloads an anonymous pull token and resolves the exact
-   `0.18.2.post3` manifest (HTTP 200).
+   `0.18.2.post4` manifest (HTTP 200).
 4. Reload the local add-on store, update the existing PTZ Fix add-on, and
-   verify live cameras, storage, PTZ, and vehicle-visits pages.
+   verify live cameras, storage, PTZ, and grouped Review and Explore.
 5. Keep Driveway Guard `frigate_vehicle_visits` disabled until actual
    camera recordings confirm that separate arrivals are not merged incorrectly.
 

@@ -1,11 +1,14 @@
 """Durable mapping between Frigate car events and conservative vehicle visits."""
 
 import logging
+from threading import RLock
+from uuid import uuid4
 
-from frigate.models import VehicleVisit, VehicleVisitEvent
+from frigate.models import Event, VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.inspection import inspect_event
 from frigate.vehicle_visits.matching import VehicleVisit as MatchVisit
 from frigate.vehicle_visits.matching import (
+    group_vehicle_events,
     image_distance,
     intersection_over_union,
     match_reason,
@@ -15,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 MAX_VISIT_GAP = 12 * 3600
 MAX_SAMPLES = 10
+_visit_lock = RLock()
 
 
 def _samples(visit: VehicleVisit) -> list[dict]:
@@ -101,6 +105,11 @@ def link_event_to_visit(event) -> tuple[str, str]:
     match is necessary for new-ID reidentification; time alone never merges
     independent car tracks.
     """
+    with _visit_lock:
+        return _link_event_to_visit(event)
+
+
+def _link_event_to_visit(event) -> tuple[str, str]:
     if event.label != "car":
         raise ValueError("Only car events can be assigned to a vehicle visit")
 
@@ -126,6 +135,10 @@ def link_event_to_visit(event) -> tuple[str, str]:
             (VehicleVisit.camera == observation.camera)
             & (VehicleVisit.last_seen >= observation.start_time - MAX_VISIT_GAP)
             & (VehicleVisit.start_time <= observation.start_time)
+            & VehicleVisit.closed_at.is_null()
+        )
+        .where(
+            VehicleVisit.id.in_(VehicleVisitEvent.select(VehicleVisitEvent.visit_id))
         )
         .order_by(VehicleVisit.last_seen.desc())
         .limit(160)
@@ -194,3 +207,116 @@ def linked_events_for_visit(visit_id: str):
         .where(VehicleVisitEvent.visit_id == visit_id)
         .order_by(VehicleVisitEvent.start_time.asc())
     )
+
+
+def _set_observations(visit: VehicleVisit, observations: list) -> None:
+    """Rebuild the appearance anchors from the retained members of a group."""
+    visit.start_time = min(item.start_time for item in observations)
+    visit.last_seen = max(item.end_time for item in observations)
+    visit.reference_hash = None
+    visit.reference_box = None
+    visit.samples = []
+    plates = {item.license_plate for item in observations if item.license_plate}
+    visit.license_plate = next(iter(plates)) if len(plates) == 1 else None
+    for observation in observations:
+        _update_sample(visit, observation)
+
+
+def correct_vehicle_events(events: list[Event], action: str) -> str:
+    """Move selected ended car events together, or explicitly close one group.
+
+    Writes are serialized with live linking. The event-link move itself is one
+    queued SQL statement; no recording, Event, or ReviewSegment is rewritten.
+    """
+    if action not in {"merge", "split", "close"}:
+        raise ValueError("Unknown vehicle group action")
+    if (
+        not events
+        or len({event.camera for event in events}) != 1
+        or any(event.label != "car" or event.end_time is None for event in events)
+    ):
+        raise ValueError("Select finished car events from one camera")
+    if action == "merge" and len(events) < 2:
+        raise ValueError("Select at least two car events to merge")
+    ids = [event.id for event in events]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Duplicate event IDs")
+
+    with _visit_lock:
+        previous = list(
+            VehicleVisitEvent.select().where(VehicleVisitEvent.event_id << ids)
+        )
+        old_ids = {link.visit_id for link in previous}
+        if action == "close" and old_ids:
+            if len(old_ids) != 1 or len(previous) != len(ids):
+                raise ValueError("Select one complete vehicle identity to close")
+            visit = VehicleVisit.get_by_id(next(iter(old_ids)))
+            visit.closed_at = visit.last_seen
+            visit.save(only=[VehicleVisit.closed_at])
+            return visit.id
+
+        observations = sorted(
+            (inspect_event(event) for event in events),
+            key=lambda item: (item.start_time, item.event_id),
+        )
+        if action == "close" and len(group_vehicle_events(observations)) != 1:
+            raise ValueError("Select one vehicle identity to close")
+
+        # Preserve the anchor for an already-correct group.
+        if action == "merge" and len(old_ids) == 1 and len(previous) == len(ids):
+            return next(iter(old_ids))
+
+        # Compute replacement metadata before moving any links. Expired source
+        # events remain untouched; their old visit can no longer match if it
+        # has no retained observations.
+        old_visits = list(VehicleVisit.select().where(VehicleVisit.id << old_ids))
+        was_closed = (
+            len(previous) == len(ids)
+            and bool(old_visits)
+            and all(old.closed_at is not None for old in old_visits)
+        )
+        for old in old_visits:
+            remaining = list(
+                Event.select()
+                .join(
+                    VehicleVisitEvent,
+                    on=(Event.id == VehicleVisitEvent.event_id),
+                )
+                .where(
+                    (VehicleVisitEvent.visit_id == old.id)
+                    & (Event.id.not_in(ids))
+                    & (Event.camera == old.camera)
+                )
+                .order_by(Event.start_time.asc())
+            )
+            if remaining:
+                _set_observations(old, [inspect_event(event) for event in remaining])
+            else:
+                old.closed_at = old.last_seen
+
+        visit_id = f"manual-{uuid4().hex[:22]}"
+        visit = VehicleVisit(
+            id=visit_id,
+            camera=events[0].camera,
+            start_time=observations[0].start_time,
+            last_seen=observations[0].end_time,
+        )
+        _set_observations(visit, observations)
+        if action == "close" or was_closed:
+            visit.closed_at = visit.last_seen
+        visit.save(force_insert=True)
+        # The entire reassignment is atomic at the single-statement level.
+        VehicleVisitEvent.insert_many(
+            [
+                {
+                    "event_id": observation.event_id,
+                    "visit_id": visit_id,
+                    "match_reason": f"manual_{action}",
+                    "start_time": observation.start_time,
+                }
+                for observation in observations
+            ]
+        ).on_conflict_replace().execute()
+        for old in old_visits:
+            old.save()
+        return visit_id

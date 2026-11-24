@@ -367,6 +367,14 @@
     "backfillResult": "Zaimportowano zdarzenia: {{processed}}",
     "backfillFailures": "Niepowodzenia: {{failed}}",
     "backfillMore": "Mogą pozostać kolejne zdarzenia; ponów import.",
-    "backfillError": "Nie udało się zaimportować historii"
+    "backfillError": "Nie udało się zaimportować historii",
+    "merge": "Połącz wybrane nagrania",
+    "split": "Rozdziel do nowej grupy",
+    "close": "Potwierdź odjazd",
+    "closed": "Odjazd potwierdzony",
+    "correctConfirm": "Zmienić grupowanie pojazdów? Oryginalne nagrania nie zostaną zmienione.",
+    "correctSuccess": "Zaktualizowano grupowanie pojazdów",
+    "correctError": "Nie można zmienić grupy. Wybierz zakończone wykrycia samochodów z jednej kamery.",
+    "skipClip": "Pomiń niedostępne nagranie"
   }
 }

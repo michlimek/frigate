@@ -1,4 +1,4 @@
-name: SimplyQ Frigate 0.18.2.post3 AMD64 image
+name: SimplyQ Frigate AMD64 release image
 
 on:
   workflow_dispatch:
@@ -42,6 +42,8 @@ jobs:
     name: Build, test and publish SimplyQ Frigate AMD64
     runs-on: ubuntu-22.04
     timeout-minutes: 180
+    outputs:
+      version: ${{ steps.tags.outputs.version }}
     steps:
       - name: Check out release source
         uses: actions/checkout@v6
@@ -49,6 +51,7 @@ jobs:
           persist-credentials: false
 
       - name: Read version and establish image tags
+        id: tags
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +61,7 @@ jobs:
             exit 1
           fi
           echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "TEST_IMAGE=ghcr.io/michlimek/frigate:${VERSION}-${GITHUB_SHA:0:7}-amd64" >> "$GITHUB_ENV"
           echo "RELEASE_IMAGE=ghcr.io/michlimek/frigate:${VERSION}-amd64" >> "$GITHUB_ENV"
           echo "ADDON_IMAGE=ghcr.io/michlimek/frigate:${VERSION}" >> "$GITHUB_ENV"
@@ -67,7 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '^image: ghcr.io/michlimek/frigate$' frigate_ptz/config.yaml
-          grep -q '^version: "0.18.2.post3"$' frigate_ptz/config.yaml
+          grep -Fxq "version: \"$RELEASE_VERSION\"" frigate_ptz/config.yaml
           test ! -e frigate_ptz/Dockerfile
 
       - name: Generate version and frontend build metadata
@@ -105,19 +109,33 @@ jobs:
             frigate.test.test_vehicle_visit_store \
             frigate.test.test_ptz_movement_prediction
 
+      - name: Generate API documentation from the built runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --workdir /opt/frigate --entrypoint python3 \
+            -v "$GITHUB_WORKSPACE/generate_api_auth_spec.py:/opt/frigate/generate_api_auth_spec.py:ro" \
+            -v "$GITHUB_WORKSPACE/docs:/opt/frigate/docs" \
+            "$TEST_IMAGE" generate_api_auth_spec.py
+      - name: Upload generated API documentation
+        uses: actions/upload-artifact@v7
+        with:
+          name: frigate-api-spec
+          path: docs/static/frigate-api.yaml
+
       - name: Verify migration and API modules in built image
         shell: bash
         run: |
           set -euo pipefail
           docker run --rm --workdir /opt/frigate --entrypoint python3 "$TEST_IMAGE" \
-            -c "from frigate.version import VERSION; from frigate.models import VehicleVisit, VehicleVisitEvent; from frigate.api.vehicle_visits import router; assert '0.18.2.post' in VERSION; assert len(router.routes) >= 3; print(VERSION)"
+            -c "from frigate.version import VERSION; from frigate.models import VehicleVisit, VehicleVisitEvent; from frigate.api.vehicle_visits import router; assert '0.18.2.post' in VERSION; assert len(router.routes) >= 5; print(VERSION)"
 
       - name: Check compiled frontend and backend in image
         shell: bash
         run: |
           set -euo pipefail
           docker run --rm --entrypoint /bin/sh "$TEST_IMAGE" -ec \
-            'test -f /opt/frigate/web/index.html && test -f /opt/frigate/frigate/vehicle_visits/store.py && test -f /opt/frigate/migrations/036_create_vehicle_visit_tables.py'
+            'test -f /opt/frigate/web/index.html && test -f /opt/frigate/frigate/vehicle_visits/store.py && test -f /opt/frigate/migrations/036_create_vehicle_visit_tables.py && test -f /opt/frigate/migrations/037_add_vehicle_visit_closed_at.py'
 
       - name: Smoke test Frigate API and database startup
         shell: bash
@@ -142,8 +160,11 @@ jobs:
               curl --fail --silent --show-error \
                 "http://127.0.0.1:5000/api/vehicle_visits?camera=all" \
                 >/dev/null
+              curl --fail --silent --show-error -X POST \
+                -H 'Content-Type: application/json' -d '{"event_ids":["missing"]}' \
+                "http://127.0.0.1:5000/api/vehicle_visits/groups" >/dev/null
               docker exec frigate-vehicle-visits-smoke python3 -c \
-                "import sqlite3; d=sqlite3.connect('/config/frigate.db'); names={r[0] for r in d.execute('select name from sqlite_master where type = ?', ('table',))}; assert {'vehiclevisit', 'vehiclevisitevent'} <= names, names"
+                "import sqlite3; d=sqlite3.connect('/config/frigate.db'); names={r[0] for r in d.execute('select name from sqlite_master where type = ?', ('table',))}; assert {'vehiclevisit', 'vehiclevisitevent'} <= names, names; assert 'closed_at' in {r[1] for r in d.execute('pragma table_info(vehiclevisit)')}"
               exit 0
             fi
             sleep 5
@@ -174,3 +195,50 @@ jobs:
             echo "Docker tag: $RELEASE_IMAGE"
             echo "Home Assistant add-on image: $ADDON_IMAGE"
           } >> "$GITHUB_STEP_SUMMARY"
+
+
+  promote-ha-channel:
+    name: Promote verified image to existing HA channel
+    needs: build-test-publish
+    if: github.ref == 'refs/heads/release/0.18.2' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: read
+    env:
+      RELEASE_VERSION: ${{ needs.build-test-publish.outputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify public manifest and advance HA metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          path=frigate_ptz/config.yaml
+          grep -Fxq "version: \"$RELEASE_VERSION\"" "$path"
+          grep -Fxq 'slug: frigate-ptz' "$path"
+          grep -Fxq 'image: ghcr.io/michlimek/frigate' "$path"
+          token="$(curl -fsSL --retry 3 'https://ghcr.io/token?scope=repository:michlimek/frigate:pull&service=ghcr.io' | jq -er '.token')"
+          curl -fsSL --retry 5 -o /dev/null \
+            -H "Authorization: Bearer $token" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/michlimek/frigate/manifests/$RELEASE_VERSION"
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=ha-addon")"
+          sha="$(jq -er '.sha' <<< "$existing")"
+          current="$(jq -er '.content' <<< "$existing" | base64 -d | awk '/^version:/{gsub(/"/, "", $2);print $2}')"
+          [[ "$current" =~ ^0\.18\.2\.post[0-9]+$ ]]
+          [[ "$RELEASE_VERSION" =~ ^0\.18\.2\.post[0-9]+$ ]]
+          if (( ${current##*post} > ${RELEASE_VERSION##*post} )); then
+            echo "Refusing to downgrade the HA channel" >&2
+            exit 1
+          fi
+          if [[ "$current" == "$RELEASE_VERSION" ]]; then
+            echo "HA channel already at $current"
+            exit 0
+          fi
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/$path" \
+            -f message="Publish verified Frigate $RELEASE_VERSION to HA channel" \
+            -f branch=ha-addon -f sha="$sha" -f content="$(base64 -w0 "$path")" >/dev/null
+          echo "Promoted $RELEASE_VERSION to the existing #ha-addon repository" >> "$GITHUB_STEP_SUMMARY"

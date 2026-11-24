@@ -2,10 +2,12 @@
 
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from frigate.api.auth import (
     allow_any_authenticated,
@@ -13,8 +15,13 @@ from frigate.api.auth import (
     require_role,
 )
 from frigate.models import Event, VehicleVisit, VehicleVisitEvent
-from frigate.vehicle_visits.inspection import event_timestamp
-from frigate.vehicle_visits.store import link_event_to_visit, linked_events_for_visit
+from frigate.vehicle_visits.inspection import event_timestamp, inspect_event
+from frigate.vehicle_visits.matching import group_vehicle_events
+from frigate.vehicle_visits.store import (
+    correct_vehicle_events,
+    link_event_to_visit,
+    linked_events_for_visit,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["vehicle-visits"])
@@ -111,12 +118,13 @@ def lookup_vehicle_visit(
     )
     if visit is None:
         return JSONResponse(content={}, status_code=404)
+    first = linked_events_for_visit(visit.id).first()
     return {
         "event_id": event_id,
         "visit_id": visit.id,
         "camera": camera,
         "match_reason": link.match_reason,
-        "is_first_event": event_id == visit.id,
+        "is_first_event": first is not None and first.event_id == event_id,
         "visit_start_time": visit.start_time,
     }
 
@@ -166,3 +174,122 @@ def backfill_vehicle_visits(
         "failed": failures,
         "more_possible": len(rows) == limit,
     }
+
+
+class VehicleGroupRequest(BaseModel):
+    event_ids: list[str] = Field(min_length=1, max_length=2000)
+
+
+class VehicleCorrectionRequest(BaseModel):
+    action: Literal["merge", "split", "close"]
+    event_ids: list[str] = Field(min_length=1, max_length=200)
+
+
+@router.post(
+    "/vehicle_visits/groups",
+    dependencies=[Depends(allow_any_authenticated())],
+)
+def groups_for_events(
+    body: VehicleGroupRequest,
+    allowed_cameras: list[str] = Depends(get_allowed_cameras_for_filter),
+):
+    """Resolve exactly the retained finished cars requested by Review or Explore.
+
+    Persisted links are authoritative. Unlinked history is grouped read-only
+    without a wall-clock cutoff, and without joining across durable identities.
+    """
+    ids = list(dict.fromkeys(body.event_ids))
+    grouped: dict[tuple[str, str], dict] = {}
+    unlinked = []
+    for start in range(0, len(ids), 200):
+        chunk = ids[start : start + 200]
+        events = list(
+            Event.select()
+            .where(
+                (Event.id << chunk)
+                & (Event.camera << allowed_cameras)
+                & (Event.label == "car")
+                & Event.end_time.is_null(False)
+            )
+            .order_by(Event.start_time.asc())
+        )
+        links = {}
+        # The mapping is joined explicitly because visit_id is not a foreign key.
+        for row in (
+            VehicleVisitEvent.select(
+                VehicleVisitEvent.event_id,
+                VehicleVisitEvent.visit_id,
+                VehicleVisit.camera,
+                VehicleVisit.closed_at,
+            )
+            .join(VehicleVisit, on=(VehicleVisitEvent.visit_id == VehicleVisit.id))
+            .where(
+                (VehicleVisitEvent.event_id << [event.id for event in events])
+                & (VehicleVisit.camera << allowed_cameras)
+            )
+            .dicts()
+        ):
+            links[row["event_id"]] = (
+                row["visit_id"],
+                row["camera"],
+                row["closed_at"],
+            )
+        for event in events:
+            link = links.get(event.id)
+            if link is None:
+                unlinked.append(event)
+                continue
+            visit_id, camera, closed_at = link
+            if camera != event.camera:
+                continue
+            group = grouped.setdefault(
+                (camera, visit_id),
+                {
+                    "camera": camera,
+                    "visit_id": visit_id,
+                    "event_ids": [],
+                    "clip_event_ids": [],
+                    "closed": closed_at is not None,
+                },
+            )
+            group["event_ids"].append(event.id)
+            if event.has_clip:
+                group["clip_event_ids"].append(event.id)
+
+    clips = {event.id for event in unlinked if event.has_clip}
+    for group in group_vehicle_events([inspect_event(event) for event in unlinked]):
+        preview_id = f"preview-{group.visit_id}"
+        grouped[(group.camera, preview_id)] = {
+            "camera": group.camera,
+            "visit_id": preview_id,
+            "event_ids": group.events,
+            "clip_event_ids": [
+                event_id for event_id in group.events if event_id in clips
+            ],
+            "closed": False,
+        }
+    return list(grouped.values())
+
+
+@router.post(
+    "/vehicle_visits/correct",
+    dependencies=[Depends(require_role(["admin"]))],
+)
+def correct_vehicle_group(
+    body: VehicleCorrectionRequest,
+    allowed_cameras: list[str] = Depends(get_allowed_cameras_for_filter),
+):
+    """Manually join, separate or confirm departure for finished car events."""
+    ids = list(dict.fromkeys(body.event_ids))
+    events = list(
+        Event.select().where((Event.id << ids) & (Event.camera << allowed_cameras))
+    )
+    if len(events) != len(ids):
+        return JSONResponse(
+            status_code=404, content={"message": "Source event unavailable"}
+        )
+    try:
+        visit_id = correct_vehicle_events(events, body.action)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"message": str(exc)})
+    return {"visit_id": visit_id, "action": body.action}

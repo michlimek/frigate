@@ -2349,6 +2349,266 @@ paths:
       security:
         - frigateUserAuth: []
       x-required-role: all_cameras
+  /vehicle_visits/preview:
+    get:
+      tags:
+        - vehicle-visits
+      summary: Vehicle Visits Preview
+      description: |-
+        **Access:** Any authenticated user.
+
+        Group likely repeat sightings without changing events, reviews or recordings.
+
+        This endpoint avoids matching on temporal proximity alone. Uncertain cases
+        remain separate pending stronger appearance evidence or manual review.
+      operationId: vehicle_visits_preview_vehicle_visits_preview_get
+      parameters:
+        - name: camera
+          in: query
+          required: true
+          schema:
+            type: string
+            title: Camera
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 300
+            minimum: 1
+            default: 200
+            title: Limit
+        - name: hours
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 48
+            minimum: 1
+            default: 24
+            title: Hours
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+        - frigateUserAuth: []
+      x-required-role: any
+  /vehicle_visits:
+    get:
+      tags:
+        - vehicle-visits
+      summary: Vehicle Visits
+      description: |-
+        **Access:** Any authenticated user.
+
+        Return one logical visit with all still-retained source videos.
+      operationId: vehicle_visits_vehicle_visits_get
+      parameters:
+        - name: camera
+          in: query
+          required: false
+          schema:
+            type: string
+            default: all
+            title: Camera
+        - name: hours
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 720
+            minimum: 1
+            default: 48
+            title: Hours
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 250
+            minimum: 1
+            default: 100
+            title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+        - frigateUserAuth: []
+      x-required-role: any
+  /vehicle_visits/lookup:
+    get:
+      tags:
+        - vehicle-visits
+      summary: Lookup Vehicle Visit
+      description: |-
+        **Access:** Any authenticated user.
+
+        Resolve a Frigate event ID to its persistent visit ID for HA clients.
+      operationId: lookup_vehicle_visit_vehicle_visits_lookup_get
+      parameters:
+        - name: camera
+          in: query
+          required: true
+          schema:
+            type: string
+            title: Camera
+        - name: event_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: Event Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+        - frigateUserAuth: []
+      x-required-role: any
+  /vehicle_visits/backfill:
+    post:
+      tags:
+        - vehicle-visits
+      summary: Backfill Vehicle Visits
+      description: |-
+        **Access:** Admin role required.
+
+        Import a bounded batch of retained historical car events in time order.
+
+        This explicitly triggered operation never edits original Frigate events.
+        Calling it again processes the next batch of unlinked events.
+      operationId: backfill_vehicle_visits_vehicle_visits_backfill_post
+      parameters:
+        - name: camera
+          in: query
+          required: true
+          schema:
+            type: string
+            title: Camera
+        - name: hours
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 720
+            minimum: 1
+            default: 48
+            title: Hours
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 500
+            minimum: 1
+            default: 250
+            title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+        - frigateAdminAuth: []
+      x-required-role: admin
+  /vehicle_visits/groups:
+    post:
+      tags:
+        - vehicle-visits
+      summary: Groups For Events
+      description: |-
+        **Access:** Any authenticated user.
+
+        Resolve exactly the retained finished cars requested by Review or Explore.
+
+        Persisted links are authoritative. Unlinked history is grouped read-only
+        without a wall-clock cutoff, and without joining across durable identities.
+      operationId: groups_for_events_vehicle_visits_groups_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleGroupRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+        - frigateUserAuth: []
+      x-required-role: any
+  /vehicle_visits/correct:
+    post:
+      tags:
+        - vehicle-visits
+      summary: Correct Vehicle Group
+      description: |-
+        **Access:** Admin role required.
+
+        Manually join, separate or confirm departure for finished car events.
+      operationId: correct_vehicle_group_vehicle_visits_correct_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleCorrectionRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+        - frigateAdminAuth: []
+      x-required-role: admin
   /:
     get:
       tags:
@@ -8925,6 +9185,40 @@ components:
         - msg
         - type
       title: ValidationError
+    VehicleCorrectionRequest:
+      properties:
+        action:
+          type: string
+          enum:
+            - merge
+            - split
+            - close
+          title: Action
+        event_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 200
+          minItems: 1
+          title: Event Ids
+      type: object
+      required:
+        - action
+        - event_ids
+      title: VehicleCorrectionRequest
+    VehicleGroupRequest:
+      properties:
+        event_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 2000
+          minItems: 1
+          title: Event Ids
+      type: object
+      required:
+        - event_ids
+      title: VehicleGroupRequest
   securitySchemes:
     frigateAdminAuth:
       type: apiKey

@@ -14,7 +14,7 @@ RUN npm run build \
 # Keep Frigate's upstream hardware/runtime dependencies; ship our complete code.
 FROM ghcr.io/blakeblackshear/frigate:0.18.2
 LABEL org.opencontainers.image.source="https://github.com/michlimek/frigate" \
-      org.opencontainers.image.version="0.18.2.post3"
+      org.opencontainers.image.version="0.18.2.post4"
 WORKDIR /opt/frigate
 COPY frigate/ frigate/
 COPY migrations/ migrations/

@@ -126,6 +126,7 @@ class VehicleVisit(Model):
     reference_box = JSONField(null=True)
     license_plate = CharField(null=True, max_length=100)
     samples = JSONField(default=list)
+    closed_at = FloatField(null=True)
 
 
 class VehicleVisitEvent(Model):

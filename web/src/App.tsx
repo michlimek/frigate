@@ -18,7 +18,6 @@ import { isRedirectingToLogin } from "@/api/auth-redirect";
 
 const Live = lazy(() => import("@/pages/Live"));
 const Events = lazy(() => import("@/pages/Events"));
-const VehicleVisits = lazy(() => import("@/pages/VehicleVisits"));
 const Explore = lazy(() => import("@/pages/Explore"));
 const Exports = lazy(() => import("@/pages/Exports"));
 const ConfigEditor = lazy(() => import("@/pages/ConfigEditor"));
@@ -94,7 +93,7 @@ function DefaultAppView() {
             <Route element={<ProtectedRoute requiredRoles={mainRouteRoles} />}>
               <Route index element={<Live />} />
               <Route path="/review" element={<Events />} />
-              <Route path="/vehicle-visits" element={<VehicleVisits />} />
+              <Route path="/vehicle-visits" element={<Redirect to="/review" />} />
               <Route path="/explore" element={<Explore />} />
               <Route path="/export" element={<Exports />} />
               <Route path="/settings" element={<Settings />} />

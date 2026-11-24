@@ -17,9 +17,11 @@ import useKeyboardListener from "@/hooks/use-keyboard-listener";
 import { toast } from "sonner";
 import { Trans, useTranslation } from "react-i18next";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { VehicleGroupActions } from "@/views/events/VehicleReviewGroup";
 
 type SearchActionGroupProps = {
   selectedObjects: string[];
+  selectedCarIds?: string[];
   setSelectedObjects: (ids: string[]) => void;
   pullLatestData: () => void;
   onSelectAllObjects: () => void;
@@ -27,6 +29,7 @@ type SearchActionGroupProps = {
 };
 export default function SearchActionGroup({
   selectedObjects,
+  selectedCarIds,
   setSelectedObjects,
   pullLatestData,
   onSelectAllObjects,
@@ -142,6 +145,13 @@ export default function SearchActionGroup({
         </div>
         {isAdmin && (
           <div className="flex items-center gap-1 md:gap-2">
+            {selectedCarIds && selectedCarIds.length === selectedObjects.length && (
+              <VehicleGroupActions
+                eventIds={selectedCarIds}
+                actions={["merge", "split", "close"]}
+                onCorrected={() => { onClearSelected(); pullLatestData(); }}
+              />
+            )}
             <Button
               className="flex items-center gap-2 p-2"
               aria-label={t("button.delete", { ns: "common" })}

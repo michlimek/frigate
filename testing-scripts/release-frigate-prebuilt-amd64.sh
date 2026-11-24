@@ -14,9 +14,9 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 branch="$(git symbolic-ref --short HEAD)"
 case "$branch" in
-  release/0.18.2|fix/vehicle-visits-sqlite-queue-backfill) ;;
+  release/0.18.2|feature/group-vehicles-in-review) ;;
   *)
-    echo "Build only the reviewed post2 release or candidate branch; got $branch" >&2
+    echo "Build only the reviewed release or candidate branch; got $branch" >&2
     exit 1
     ;;
 esac
@@ -55,7 +55,7 @@ docker run --rm --workdir /opt/frigate --entrypoint python3 "$image" \
   frigate.test.test_ptz_movement_prediction
 
 docker run --rm --entrypoint /bin/sh "$image" -ec \
-  'test -f /opt/frigate/web/index.html && test -f /opt/frigate/frigate/vehicle_visits/store.py && test -f /opt/frigate/migrations/036_create_vehicle_visit_tables.py'
+  'test -f /opt/frigate/web/index.html && test -f /opt/frigate/frigate/vehicle_visits/store.py && test -f /opt/frigate/migrations/036_create_vehicle_visit_tables.py && test -f /opt/frigate/migrations/037_add_vehicle_visit_closed_at.py'
 
 # Validate a real Frigate process and the migration in an isolated Docker volume.
 config_volume="frigate-release-config-$short_sha"
