@@ -598,7 +598,7 @@ function DetectionReview({
   const { t } = useTranslation(["views/events"]);
 
   const reviewTimelineRef = useRef<HTMLDivElement>(null);
-  const groupedItems = useVehicleReviewGroups(currentItems, timeRange);
+  const groupedItems = useVehicleReviewGroups(currentItems);
 
   // preview
 
@@ -900,7 +900,7 @@ function DetectionReview({
                     </div>
                   );
                 };
-                if (group.items.length === 1 || selectedReviews.length > 0) {
+                if (!group.vehicle || group.eventIds.length < 2 || selectedReviews.length > 0) {
                   return group.items.map(renderItem);
                 }
                 return (

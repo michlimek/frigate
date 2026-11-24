@@ -23,6 +23,7 @@ import { FrigateConfig } from "@/types/frigateConfig";
 import { useTranslation } from "react-i18next";
 import { getTranslatedLabel } from "@/utils/i18n";
 import { LuSearchX } from "react-icons/lu";
+import { useVehicleSearchGroups } from "@/views/events/VehicleReviewGroup";
 
 type ExploreViewProps = {
   setSearchDetail: (search: SearchResult | undefined) => void;
@@ -138,6 +139,7 @@ function ThumbnailRow({
 }: ThumbnailRowType) {
   const { t } = useTranslation(["views/explore"]);
   const navigate = useNavigate();
+  const groups = useVehicleSearchGroups(searchResults ?? [], label === "car");
 
   const handleSearch = (label: string) => {
     const similaritySearchParams = new URLSearchParams({
@@ -161,18 +163,27 @@ function ThumbnailRow({
         {isValidating && <ActivityIndicator className="ml-2 size-4" />}
       </div>
       <div className="flex flex-row items-center space-x-2 py-2">
-        {searchResults?.map((event) => (
+        {groups.map((group) => (
           <div
-            key={event.id}
+            key={group.key}
             className="relative aspect-square h-auto max-w-[20%] flex-grow md:max-w-[10%]"
           >
             <ExploreThumbnailImage
-              event={event}
+              event={group.items[0]}
               setSearchDetail={setSearchDetail}
               mutate={mutate}
               setSimilaritySearch={setSimilaritySearch}
               onSelectSearch={onSelectSearch}
             />
+            {group.vehicle && group.eventIds.length > 1 && (
+              <button
+                className="absolute right-1 top-1 z-30 rounded bg-black/80 px-1 text-xs text-white"
+                onClick={() => handleSearch(label)}
+                aria-label={t("vehicleVisits.eventCount", { ns: "common", count: group.eventIds.length })}
+              >
+                {group.eventIds.length}
+              </button>
+            )}
           </div>
         ))}
         <div

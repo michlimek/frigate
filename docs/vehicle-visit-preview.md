@@ -11,7 +11,8 @@ segments. No MP4 concatenation or deletion takes place.
   corresponding `vehiclevisit` row is durable across Frigate restarts.
   Other cameras are not automatically grouped, but their retained car events
   can be imported explicitly through the admin backfill endpoint.
-- A visit ID is the first Frigate event ID in the group.
+- Automatically created visits use the first event ID. Manual corrections
+  create a stable independent group ID; original event IDs never change.
 - Strong picture similarity (grayscale dHash) **and** strong relative box
   overlap are required to connect different event IDs.
 - Several camera viewpoints can be remembered if they were captured under
@@ -39,8 +40,21 @@ Mixed-object or audio segments, different cameras or severities, ambiguous
 links, and active segments stay separate. Selection mode exposes the original
 cards, so bulk actions still use real review IDs. The timeline and counts
 continue to describe original review segments, not synthetic database rows.
-The old Vehicle Visits URL remains accessible for compatibility, but is no
-longer a navigation item. Explore is unchanged.
+The old Vehicle Visits URL redirects to Review. Explore's normal object grid
+also groups finished cars, and the summary shows a count on grouped thumbnails.
+Semantic/similarity search preserves individual result ranking.
+
+Administrators can select finished car detections from one camera to merge
+or separate the selected recordings. Expand a group to separate one source
+event. Confirm departure to close the group's automatic matching window.
+A closed group retains its recordings but cannot absorb future detections.
+Manual corrections move only the selected source event IDs and survive a
+restart. Mixed-object reviews are not edited.
+
+PTZ track loss is not proof of departure. The close action is deliberately
+explicit, and can also be called by an authenticated external automation
+with independent evidence of departure. No departure is inferred from
+a moved PTZ image or from a zone whose coordinates move with the camera.
 
 Recordings are referenced, not rewritten. Source events and original review
 records remain available and obey existing Frigate retention settings.
@@ -58,28 +72,31 @@ can access.
   existing read-only historical preview; unlike the persisted list, does not
   change the database.
 
-The two new tables are installed by migration
-`036_create_vehicle_visit_tables.py`. Frigate's built-in migration process
+- `POST /api/vehicle_visits/groups` with `{"event_ids":["ID1","ID2"]}`:
+  read-only exact grouping of retained finished events (up to 2,000 per request).
+- `POST /api/vehicle_visits/correct` (admin) with
+  `{"action":"merge","event_ids":["ID1","ID2"]}`. Actions: `merge`,
+  `split`, and `close`. Only ended car events from one allowed camera can
+  be changed; at most 200 event IDs per correction.
+
+The two grouping tables are installed by migration
+`036_create_vehicle_visit_tables.py`. Migration
+`037_add_vehicle_visit_closed_at.py` adds a nullable explicit departure time. Frigate's built-in migration process
 creates a backup before applying database migrations. Take an independent
 database backup before deploying a test build.
 
 ## Historical backfill
 
-New car events are linked automatically to persistent visits on configured
-PTZ cameras. Review also requests the existing read-only preview for recent
-history (up to 48 hours, at most 300 car events per camera), without requiring
-an import. Persisted links take precedence; preview groups with conflicting
-persisted links are not applied. Persistent grouping is bounded to the latest
-250 visits within 30 days. Older or unmatched segments remain visible.
-For durable historical links (for example for Driveway Guard), an administrator
-can still open `/vehicle-visits` directly and choose **Import history**. This explicitly
-calls `POST /api/vehicle_visits/backfill?camera=obrotowa&hours=48&limit=250`
-and processes at most 250 unlinked historical events in chronological order
-per request. Repeat the import while the response indicates more history.
+New car events are linked automatically on configured PTZ cameras. Review
+and Explore request grouping by exact visible event IDs, including older
+retained history, without requiring manual import. Persisted group identities
+take precedence. Unlinked events are grouped read-only among themselves.
+Requests are bounded to 2,000 IDs per batch; purely historical preview groups
+do not span batches. Persisted identities do. Expired events cannot be restored.
 
-The import never deletes existing events or modifies recording files. Failed
-events are reported, while valid events can still be imported. Previously
-expired events or deleted thumbnails cannot be restored by the import.
+The legacy admin backfill API remains available for clients needing durable
+historical links. Original events, review segments and recordings are never
+rewritten by grouping or manual corrections.
 
 ## Driveway Guard
 
@@ -93,7 +110,11 @@ to its earlier local matching rather than losing all arrival alerts.
 The new feature does not change Frigate's native MQTT `frigate/events`
 payload. Existing consumers remain compatible.
 
-## Installable image: SimplyQ 0.18.2.post3
+## Installable image: SimplyQ 0.18.2.post4
+
+For existing GitHub add-on installations use the unchanged repository
+`https://github.com/michlimek/frigate#ha-addon`. The release workflow promotes
+its manifest only after tests, image publication and anonymous pull verification.
 
 Frigate 0.18.2.post1 failed to build locally on Home Assistant Słopnice3.
 Node/Vite reached the approximately 2 GiB V8 heap limit and aborted during
@@ -109,12 +130,12 @@ The new HA add-on has **no Dockerfile** and only pulls:
 
 ```yaml
 slug: frigate-ptz
-version: "0.18.2.post3"
+version: "0.18.2.post4"
 image: ghcr.io/michlimek/frigate
 ```
 
 The image reference used by HA Supervisor will be:
-`ghcr.io/michlimek/frigate:0.18.2.post3`.
+`ghcr.io/michlimek/frigate:0.18.2.post4`.
 
 This image is **not available merely because the version was committed**.
 External CI must pass the unit tests, compiled frontend check, Frigate API
@@ -145,7 +166,7 @@ and triggers local Docker compilation must never be used again.
 ### External build without GitHub Actions
 
 On an AMD64 Linux workstation or an x86-64 PC running Docker Desktop/WSL2
-and Git, check out the post3 candidate (before merge) or release source
+and Git, check out the post4 candidate (before merge) or release source
 (after merge) and run
 `testing-scripts/release-frigate-prebuilt-amd64.sh`. It tests locally and
 does not publish by default. When validated and authenticated to GHCR,
@@ -199,6 +220,4 @@ statement and then retrieves the row by its original event ID.
 This works with queued SQLite writes without modifying the
 existing events, snapshots or recordings. The historical
 import result now shows both successful imports and failed events.
-After installing a release containing this fix, re-run
-**Import history** for the relevant camera to recover unlinked
-events from the retention window.
+This fix remains included. Review and Explore now group retained history directly.

@@ -1,6 +1,7 @@
 import type { ReviewSegment } from "@/types/review";
+import type { SearchResult } from "@/types/search";
 import { describe, expect, it } from "vitest";
-import { groupVehicleReviews } from "./vehicleReviewGroups";
+import { groupVehicleReviews, groupVehicleSearchResults } from "./vehicleReviewGroups";
 
 const item = (id: string, detection: string, camera = "ptz"): ReviewSegment => ({
   id,
@@ -40,12 +41,13 @@ describe("groupVehicleReviews", () => {
     expect(groupVehicleReviews([a, b, c, d, e], [link])).toHaveLength(5);
   });
 
-  it("does not let read-only previews override persisted identities", () => {
+  it("does not hide events with conflicting identities", () => {
     const a = item("r1", "100-a");
     const b = item("r2", "200-b");
     const split = { ...link, event_ids: ["100-a"] };
-    expect(groupVehicleReviews([a, b], [split], [link])).toHaveLength(2);
-    expect(groupVehicleReviews([a, b], [], [link])).toHaveLength(1);
+    const conflicting = { ...link, visit_id: "conflicting" };
+    expect(groupVehicleReviews([a, b], [split, conflicting])).toHaveLength(2);
+    expect(groupVehicleReviews([a, b], [link])).toHaveLength(1);
   });
 
   it("leaves reviews containing two vehicle identities separate", () => {
@@ -60,5 +62,26 @@ describe("groupVehicleReviews", () => {
     const a = item("r1", "100-a");
     const b = { ...item("r2", "200-b"), severity: "detection" as const };
     expect(groupVehicleReviews([a, b], [link])).toHaveLength(2);
+  });
+});
+
+
+describe("groupVehicleSearchResults", () => {
+  it("groups only finished car detections and excludes missing clips from playback", () => {
+    const result = (id: string, label = "car") =>
+      ({ id, label, camera: "ptz", start_time: 100, end_time: 110 }) as SearchResult;
+    const a = result("100-a");
+    const b = result("200-b");
+    const c = result("300-c", "person");
+    const groups = groupVehicleSearchResults([b, c, a], [{
+      ...link,
+      clip_event_ids: ["200-b"],
+      closed: true,
+    }]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].eventIds).toEqual(["100-a", "200-b"]);
+    expect(groups[0].clipEventIds).toEqual(["200-b"]);
+    expect(groups[0].closed).toBe(true);
+    expect(groups[1].items).toEqual([c]);
   });
 });

@@ -349,6 +349,14 @@
     "backfillResult": "Imported events: {{processed}}",
     "backfillFailures": "Failed: {{failed}}",
     "backfillMore": "More history may remain; repeat the import.",
-    "backfillError": "Unable to import vehicle history"
+    "backfillError": "Unable to import vehicle history",
+    "merge": "Merge selected recordings",
+    "split": "Separate into a new group",
+    "close": "Confirm departure",
+    "closed": "Departure confirmed",
+    "correctConfirm": "Change the vehicle grouping? Original recordings will not be modified.",
+    "correctSuccess": "Vehicle grouping updated",
+    "correctError": "Unable to update the group. Select finished car events from one camera.",
+    "skipClip": "Skip unavailable recording"
   }
 }

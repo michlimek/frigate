@@ -9,9 +9,9 @@ from unittest.mock import patch
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 from frigate.db.sqlitevecq import SqliteVecQueueDatabase
-from frigate.models import VehicleVisit, VehicleVisitEvent
+from frigate.models import Event, VehicleVisit, VehicleVisitEvent
 from frigate.vehicle_visits.matching import VehicleObservation
-from frigate.vehicle_visits.store import link_event_to_visit
+from frigate.vehicle_visits.store import correct_vehicle_events, link_event_to_visit
 
 
 class TestVehicleVisitStore(unittest.TestCase):
@@ -19,12 +19,12 @@ class TestVehicleVisitStore(unittest.TestCase):
 
     def setUp(self):
         self.db = SqliteExtDatabase(":memory:")
-        self.db.bind([VehicleVisit, VehicleVisitEvent])
+        self.db.bind([Event, VehicleVisit, VehicleVisitEvent])
         self.db.connect()
-        self.db.create_tables([VehicleVisit, VehicleVisitEvent])
+        self.db.create_tables([Event, VehicleVisit, VehicleVisitEvent])
 
     def tearDown(self):
-        self.db.drop_tables([VehicleVisitEvent, VehicleVisit])
+        self.db.drop_tables([VehicleVisitEvent, VehicleVisit, Event])
         self.db.close()
 
     def event(
@@ -141,6 +141,104 @@ class TestVehicleVisitStore(unittest.TestCase):
     def test_twelve_hour_gap_starts_new_visit(self):
         self.record(self.event("a", 100))
         self.assertEqual(self.record(self.event("b", 100 + 12 * 3600 + 50))[0], "b")
+
+    def stored_event(self, eid, at, camera="obrotowa"):
+        return Event.create(
+            id=eid,
+            camera=camera,
+            label="car",
+            start_time=at,
+            end_time=at + 4,
+            top_score=0.9,
+            score=0.9,
+            false_positive=False,
+            zones=[],
+            thumbnail="",
+            region=[],
+            box=[],
+            area=0,
+            plus_id="",
+            model_hash="",
+            detector_type="",
+            model_type="",
+            data={},
+        )
+
+    def test_manual_merge_split_and_close_on_queued_database(self):
+        with TemporaryDirectory() as directory:
+            path = str(Path(directory) / "manual.db")
+            models = [Event, VehicleVisit, VehicleVisitEvent]
+            schema = SqliteExtDatabase(path)
+            schema.bind(models)
+            schema.connect()
+            schema.create_tables(models)
+            schema.close()
+            queued = SqliteVecQueueDatabase(path, load_vec_extension=False)
+            queued.bind(models)
+            try:
+                a = self.stored_event("a", 100)
+                b = self.stored_event("b", 200)
+                observations = {
+                    "a": self.event("a", 100)[1],
+                    "b": self.event("b", 200, digest=0xAA55110022334455)[1],
+                }
+                with patch(
+                    "frigate.vehicle_visits.store.inspect_event",
+                    side_effect=lambda event: observations[event.id],
+                ):
+                    link_event_to_visit(a)
+                    link_event_to_visit(b)
+                    joined = correct_vehicle_events([a, b], "merge")
+                    self.assertEqual(
+                        VehicleVisitEvent.get_by_id("a").visit_id, joined
+                    )
+                    self.assertEqual(
+                        VehicleVisitEvent.get_by_id("b").visit_id, joined
+                    )
+                    self.assertIsNone(VehicleVisit.get_by_id(joined).closed_at)
+                    separated = correct_vehicle_events([b], "split")
+                    self.assertNotEqual(separated, joined)
+                    self.assertEqual(
+                        VehicleVisitEvent.get_by_id("a").visit_id, joined
+                    )
+                    self.assertEqual(
+                        VehicleVisitEvent.get_by_id("b").visit_id, separated
+                    )
+                    self.assertEqual(correct_vehicle_events([a], "close"), joined)
+                    self.assertIsNotNone(VehicleVisit.get_by_id(joined).closed_at)
+                    self.assertEqual(link_event_to_visit(b)[0], separated)
+                    self.assertEqual(Event.select().count(), 2)
+                self.assertEqual(self.record(self.event("c", 300))[0], "c")
+            finally:
+                queued.stop()
+                self.db.bind(models)
+
+    def test_historical_read_groups_only_visible_camera(self):
+        from frigate.api.vehicle_visits import VehicleGroupRequest, groups_for_events
+
+        self.stored_event("a", 100)
+        self.stored_event("b", 200)
+        self.stored_event("c", 300, camera="other")
+        observations = {
+            "a": self.event("a", 100)[1],
+            "b": self.event("b", 200)[1],
+        }
+        with patch(
+            "frigate.api.vehicle_visits.inspect_event",
+            side_effect=lambda event: observations[event.id],
+        ):
+            groups = groups_for_events(
+                VehicleGroupRequest(event_ids=["a", "b", "c"]),
+                ["obrotowa"],
+            )
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["event_ids"], ["a", "b"])
+        self.assertEqual(VehicleVisitEvent.select().count(), 0)
+
+    def test_confirmed_departure_prevents_rejoining(self):
+        self.record(self.event("a", 100))
+        VehicleVisit.update(closed_at=104).where(VehicleVisit.id == "a").execute()
+        self.assertEqual(self.record(self.event("b", 120))[0], "b")
 
     def test_mapping_survives_reinitializing_service(self):
         self.record(self.event("a", 100))

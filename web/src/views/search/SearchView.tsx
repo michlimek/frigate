@@ -36,6 +36,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { IoMdArrowRoundBack } from "react-icons/io";
 import { useAllowedCameras } from "@/hooks/use-allowed-cameras";
+import { VehicleReviewGroupCard, useVehicleSearchGroups } from "@/views/events/VehicleReviewGroup";
 
 type SearchViewProps = {
   search: string;
@@ -257,6 +258,11 @@ export default function SearchView({
   // search interaction
 
   const [selectedObjects, setSelectedObjects] = useState<string[]>([]);
+  const groupedResults = useVehicleSearchGroups(
+    uniqueResults,
+    !searchTerm && !searchFilter?.search_type?.includes("similarity") &&
+      selectedObjects.length === 0,
+  );
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const onSelectSearch = useCallback(
@@ -608,6 +614,7 @@ export default function SearchView({
                 >
                   <SearchActionGroup
                     selectedObjects={selectedObjects}
+                    selectedCarIds={uniqueResults.filter((item) => selectedObjects.includes(item.id) && item.label === "car" && item.end_time != null).map((item) => item.id)}
                     setSelectedObjects={setSelectedObjects}
                     pullLatestData={refresh}
                     onSelectAllObjects={onSelectAllObjects}
@@ -641,7 +648,9 @@ export default function SearchView({
         {uniqueResults && (
           <div className={gridClassName}>
             {uniqueResults &&
-              uniqueResults.map((value, index) => {
+              groupedResults.map((group) => {
+                const renderItem = (value: SearchResult) => {
+                const index = uniqueResults.findIndex((item) => item.id === value.id);
                 const selected = selectedObjects.includes(value.id);
 
                 return (
@@ -742,6 +751,17 @@ export default function SearchView({
                       className={`review-item-ring pointer-events-none absolute inset-0 z-30 size-full rounded-lg outline outline-[3px] -outline-offset-[2.8px] ${selected ? `shadow-selected outline-selected` : "outline-transparent duration-500"}`}
                     />
                   </div>
+                );
+                };
+                if (!group.vehicle || group.eventIds.length < 2) {
+                  return group.items.map(renderItem);
+                }
+                return (
+                  <VehicleReviewGroupCard
+                    key={group.key}
+                    group={group}
+                    renderItem={renderItem}
+                  />
                 );
               })}
           </div>

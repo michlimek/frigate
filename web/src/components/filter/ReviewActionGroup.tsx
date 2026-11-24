@@ -22,6 +22,8 @@ import { Trans, useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import MultiExportDialog from "../overlay/MultiExportDialog";
+import { isFinishedCarReview } from "@/utils/vehicleReviewGroups";
+import { VehicleGroupActions } from "@/views/events/VehicleReviewGroup";
 
 type ReviewActionGroupProps = {
   selectedReviews: ReviewSegment[];
@@ -148,6 +150,15 @@ export default function ReviewActionGroup({
           </div>
         </div>
         <div className="flex items-center gap-1 md:gap-2">
+          {selectedReviews.length > 0 &&
+            selectedReviews.every(isFinishedCarReview) &&
+            new Set(selectedReviews.map((item) => item.camera)).size === 1 && (
+              <VehicleGroupActions
+                eventIds={[...new Set(selectedReviews.flatMap((item) => item.data.detections))]}
+                actions={["merge", "split", "close"]}
+                onCorrected={() => { onClearSelected(); pullLatestData(); }}
+              />
+            )}
           {selectedReviews.length == 1 && (
             <Button
               className="flex items-center gap-2 p-2"

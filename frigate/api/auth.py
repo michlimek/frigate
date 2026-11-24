@@ -99,6 +99,7 @@ def require_admin_by_default():
         "/vehicle_visits",
         "/vehicle_visits/preview",
         "/vehicle_visits/lookup",
+        "/vehicle_visits/groups",
         "/events",
         "/cases",
         "/exports",
