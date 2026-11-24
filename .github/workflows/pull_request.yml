@@ -10,6 +10,8 @@ on:
 
 env:
   DEFAULT_PYTHON: 3.11
+  # Match the proven external release build; Vite may exceed Node's default heap.
+  NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
   web_lint:

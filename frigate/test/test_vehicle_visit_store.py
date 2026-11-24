@@ -189,18 +189,12 @@ class TestVehicleVisitStore(unittest.TestCase):
                     link_event_to_visit(a)
                     link_event_to_visit(b)
                     joined = correct_vehicle_events([a, b], "merge")
-                    self.assertEqual(
-                        VehicleVisitEvent.get_by_id("a").visit_id, joined
-                    )
-                    self.assertEqual(
-                        VehicleVisitEvent.get_by_id("b").visit_id, joined
-                    )
+                    self.assertEqual(VehicleVisitEvent.get_by_id("a").visit_id, joined)
+                    self.assertEqual(VehicleVisitEvent.get_by_id("b").visit_id, joined)
                     self.assertIsNone(VehicleVisit.get_by_id(joined).closed_at)
                     separated = correct_vehicle_events([b], "split")
                     self.assertNotEqual(separated, joined)
-                    self.assertEqual(
-                        VehicleVisitEvent.get_by_id("a").visit_id, joined
-                    )
+                    self.assertEqual(VehicleVisitEvent.get_by_id("a").visit_id, joined)
                     self.assertEqual(
                         VehicleVisitEvent.get_by_id("b").visit_id, separated
                     )

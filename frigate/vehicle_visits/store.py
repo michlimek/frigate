@@ -270,8 +270,10 @@ def correct_vehicle_events(events: list[Event], action: str) -> str:
         # events remain untouched; their old visit can no longer match if it
         # has no retained observations.
         old_visits = list(VehicleVisit.select().where(VehicleVisit.id << old_ids))
-        was_closed = len(previous) == len(ids) and bool(old_visits) and all(
-            old.closed_at is not None for old in old_visits
+        was_closed = (
+            len(previous) == len(ids)
+            and bool(old_visits)
+            and all(old.closed_at is not None for old in old_visits)
         )
         for old in old_visits:
             remaining = list(
