@@ -61,6 +61,7 @@ export default function useNavigation(
           icon: FaCarSide,
           title: "menu.vehicleVisits",
           url: "/vehicle-visits",
+          enabled: false,
         },
         {
           id: ID_EXPLORE,

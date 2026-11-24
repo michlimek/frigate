@@ -114,18 +114,13 @@ def group_vehicle_events(events: list[VehicleObservation]) -> list[VehicleVisit]
         if event.event_id in seen_ids:
             continue
         seen_ids.add(event.event_id)
-        best: tuple[int, VehicleVisit, str] | None = None
+        matches = []
         for group in reversed(groups):
             reason = match_reason(group, event)
             if reason:
-                rank = {
-                    "stationary_visual_match": 3,
-                    "recent_visual_match": 2,
-                    "plate_and_visual_match": 1,
-                }[reason]
-                if best is None or rank > best[0]:
-                    best = (rank, group, reason)
-        if best is None:
+                matches.append((group, reason))
+        # Like the durable matcher, never choose arbitrarily between candidates.
+        if len(matches) != 1:
             group = VehicleVisit(
                 visit_id=event.event_id,
                 camera=event.camera,
@@ -135,5 +130,6 @@ def group_vehicle_events(events: list[VehicleObservation]) -> list[VehicleVisit]
             group.add(event, "first_detection")
             groups.append(group)
         else:
-            best[1].add(event, best[2])
+            group, reason = matches[0]
+            group.add(event, reason)
     return groups

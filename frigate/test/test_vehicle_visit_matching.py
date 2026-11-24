@@ -104,6 +104,16 @@ class TestVehicleVisitMatching(unittest.TestCase):
         self.assertEqual(len(visits), 2)
         self.assertEqual(visits[0].events, ["a", "b"])
 
+    def test_ambiguous_preview_match_stays_separate(self):
+        visits = group_vehicle_events(
+            [
+                self.event("a", 100, plate="KR12345"),
+                self.event("b", 110, plate="KR12346"),
+                self.event("c", 120),
+            ]
+        )
+        self.assertEqual(len(visits), 3)
+
     def test_invalid_boxes_are_not_matched(self):
         self.assertEqual(intersection_over_union((0, 0, 0, 0), self.BOX), 0.0)
         self.assertEqual(

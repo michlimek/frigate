@@ -100,6 +100,7 @@ import PlatformAwareDialog from "@/components/overlay/dialog/PlatformAwareDialog
 import MotionPreviewsPane from "./MotionPreviewsPane";
 import { EmptyCard } from "@/components/card/EmptyCard";
 import { EmptyCardData } from "@/types/card";
+import { VehicleReviewGroupCard, useVehicleReviewGroups } from "./VehicleReviewGroup";
 
 type EventViewProps = {
   reviewItems?: SegmentedReviewData;
@@ -597,6 +598,7 @@ function DetectionReview({
   const { t } = useTranslation(["views/events"]);
 
   const reviewTimelineRef = useRef<HTMLDivElement>(null);
+  const groupedItems = useVehicleReviewGroups(currentItems, timeRange);
 
   // preview
 
@@ -855,44 +857,65 @@ function DetectionReview({
           ref={contentRef}
         >
           {!loading && currentItems
-            ? currentItems.map((value) => {
-                const selected = selectedReviews.some((r) => r.id === value.id);
+            ? groupedItems.map((group) => {
+                const renderItem = (value: ReviewSegment) => {
+                  const selected = selectedReviews.some((r) => r.id === value.id);
 
-                return (
-                  <div
-                    key={value.id}
-                    ref={minimapRef}
-                    data-start={value.start_time}
-                    data-segment-start={
-                      alignStartDateToTimeline(value.start_time) -
-                      zoomSettings.segmentDuration
-                    }
-                    className="review-item relative rounded-lg"
-                  >
-                    <div className="aspect-video overflow-hidden rounded-lg">
-                      <PreviewThumbnailPlayer
-                        review={value}
-                        allPreviews={relevantPreviews}
-                        timeRange={timeRange}
-                        setReviewed={markItemAsReviewed}
-                        scrollLock={scrollLock}
-                        onTimeUpdate={onPreviewTimeUpdate}
-                        onClick={(
-                          review: ReviewSegment,
-                          ctrl: boolean,
-                          detail: boolean,
-                        ) => {
-                          onSelectReview(review, ctrl, detail);
-                        }}
+                  return (
+                    <div
+                      key={value.id}
+                      ref={minimapRef}
+                      data-start={value.start_time}
+                      data-segment-start={
+                        alignStartDateToTimeline(value.start_time) -
+                        zoomSettings.segmentDuration
+                      }
+                      className="review-item relative rounded-lg"
+                    >
+                      <div className="aspect-video overflow-hidden rounded-lg">
+                        <PreviewThumbnailPlayer
+                          review={value}
+                          allPreviews={relevantPreviews}
+                          timeRange={timeRange}
+                          setReviewed={markItemAsReviewed}
+                          scrollLock={scrollLock}
+                          onTimeUpdate={onPreviewTimeUpdate}
+                          onClick={(
+                            review: ReviewSegment,
+                            ctrl: boolean,
+                            detail: boolean,
+                          ) => {
+                            onSelectReview(review, ctrl, detail);
+                          }}
+                        />
+                      </div>
+                      <div
+                        className={cn(
+                          "review-item-ring pointer-events-none absolute inset-0 z-10 size-full rounded-lg outline outline-[3px] -outline-offset-[2.8px]",
+                          selected
+                            ? `outline-severity_${value.severity} shadow-severity_${value.severity}`
+                            : "outline-transparent duration-500",
+                        )}
                       />
                     </div>
-                    <div
-                      className={cn(
-                        "review-item-ring pointer-events-none absolute inset-0 z-10 size-full rounded-lg outline outline-[3px] -outline-offset-[2.8px]",
-                        selected
-                          ? `outline-severity_${value.severity} shadow-severity_${value.severity}`
-                          : "outline-transparent duration-500",
-                      )}
+                  );
+                };
+                if (group.items.length === 1 || selectedReviews.length > 0) {
+                  return group.items.map(renderItem);
+                }
+                return (
+                  <div
+                    key={group.key}
+                    ref={minimapRef}
+                    data-start={group.items[0].start_time}
+                    data-segment-start={
+                      alignStartDateToTimeline(group.items[0].start_time) -
+                      zoomSettings.segmentDuration
+                    }
+                  >
+                    <VehicleReviewGroupCard
+                      group={group}
+                      renderItem={renderItem}
                     />
                   </div>
                 );

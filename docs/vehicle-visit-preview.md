@@ -32,11 +32,15 @@ For security-critical use, independent approach/absence evidence is needed.
 
 ## UI
 
-Open **Vehicle visits** from the Frigate navigation. Visits are displayed as
-one card per visit with one representative thumbnail and an ordered playlist
-of all still-retained source clips. Each clip links to the normal Frigate
-Review timeline. This is a separate view; the original Review timeline still
-shows ordinary Frigate review segments.
+In **Review**, compatible car-only review segments appear as one card with a
+representative thumbnail and a chronological playlist of original event clips.
+Expand the card to access every native review segment and its usual actions.
+Mixed-object or audio segments, different cameras or severities, ambiguous
+links, and active segments stay separate. Selection mode exposes the original
+cards, so bulk actions still use real review IDs. The timeline and counts
+continue to describe original review segments, not synthetic database rows.
+The old Vehicle Visits URL remains accessible for compatibility, but is no
+longer a navigation item. Explore is unchanged.
 
 Recordings are referenced, not rewritten. Source events and original review
 records remain available and obey existing Frigate retention settings.
@@ -61,9 +65,14 @@ database backup before deploying a test build.
 
 ## Historical backfill
 
-When this version is installed, new car events are linked automatically to
-persistent visits. To import existing retained detections, open the Vehicle
-visits page as an administrator and choose **Import history**. This explicitly
+New car events are linked automatically to persistent visits on configured
+PTZ cameras. Review also requests the existing read-only preview for recent
+history (up to 48 hours, at most 300 car events per camera), without requiring
+an import. Persisted links take precedence; preview groups with conflicting
+persisted links are not applied. Persistent grouping is bounded to the latest
+250 visits within 30 days. Older or unmatched segments remain visible.
+For durable historical links (for example for Driveway Guard), an administrator
+can still open `/vehicle-visits` directly and choose **Import history**. This explicitly
 calls `POST /api/vehicle_visits/backfill?camera=obrotowa&hours=48&limit=250`
 and processes at most 250 unlinked historical events in chronological order
 per request. Repeat the import while the response indicates more history.
