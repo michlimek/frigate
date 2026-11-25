@@ -149,8 +149,7 @@ class TrackedObjectProcessor(threading.Thread):
                 and not after["false_positive"]
                 and (obj.has_clip or obj.has_snapshot)
                 and camera_state.camera_config.onvif.autotracking.enabled_in_config
-                and time.monotonic()
-                - vehicle_sample_at.get(after["id"], float("-inf"))
+                and time.monotonic() - vehicle_sample_at.get(after["id"], float("-inf"))
                 >= 20.0
             ):
                 # The normal thumbnail file is written only at track end.

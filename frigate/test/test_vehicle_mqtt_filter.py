@@ -75,7 +75,9 @@ class TestVehicleNotificationFilter(unittest.TestCase):
         }
         self.sent = []
         self.now = 0.0
-        self.filter = VehicleNotificationFilter(self.send, self.lookup, lambda: self.now)
+        self.filter = VehicleNotificationFilter(
+            self.send, self.lookup, lambda: self.now
+        )
 
     def lookup(self, camera, ids):
         return {
@@ -304,7 +306,9 @@ class TestVehicleLinkLookup(unittest.TestCase):
                     },
                 )
                 self.assertEqual(lookup_links("other", ["b"]), {})
-                VehicleVisit.update(closed_at=110).where(VehicleVisit.id == "a").execute()
+                VehicleVisit.update(closed_at=110).where(
+                    VehicleVisit.id == "a"
+                ).execute()
                 self.assertEqual(
                     lookup_links("ptz", ["b"]), {"b": VehicleLink("a", False)}
                 )
