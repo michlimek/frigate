@@ -98,7 +98,7 @@ def _update_sample(visit: VehicleVisit, observation) -> bool:
     return True
 
 
-def link_event_to_visit(event) -> tuple[str, str]:
+def link_event_to_visit(event, live_thumbnail: str | None = None) -> tuple[str, str]:
     """Persist an event-to-visit link. Safe to call for repeated event updates.
 
     All original Frigate Event and ReviewSegment rows are retained. A photo
@@ -106,14 +106,18 @@ def link_event_to_visit(event) -> tuple[str, str]:
     independent car tracks.
     """
     with _visit_lock:
-        return _link_event_to_visit(event)
+        return _link_event_to_visit(event, live_thumbnail)
 
 
-def _link_event_to_visit(event) -> tuple[str, str]:
+def _link_event_to_visit(event, live_thumbnail: str | None) -> tuple[str, str]:
     if event.label != "car":
         raise ValueError("Only car events can be assigned to a vehicle visit")
 
-    observation = inspect_event(event)
+    observation = (
+        inspect_event(event, live_thumbnail)
+        if live_thumbnail is not None
+        else inspect_event(event)
+    )
     previous = VehicleVisitEvent.get_or_none(VehicleVisitEvent.event_id == event.id)
     if previous is not None:
         visit = VehicleVisit.get_or_none(VehicleVisit.id == previous.visit_id)

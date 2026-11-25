@@ -105,6 +105,7 @@ class EventProcessor(threading.Thread):
 
             if source_type == EventTypeEnum.tracked_object:
                 id = event_data["id"]
+                vehicle_thumbnail = event_data.pop("vehicle_thumbnail", None)
                 self.timeline_queue.put(
                     (
                         camera,
@@ -123,7 +124,9 @@ class EventProcessor(threading.Thread):
                     self.events_in_process[id] = event_data
                     continue
 
-                self.handle_object_detection(event_type, camera, event_data)
+                self.handle_object_detection(
+                    event_type, camera, event_data, vehicle_thumbnail
+                )
             elif source_type == EventTypeEnum.api:
                 self.timeline_queue.put(
                     (
@@ -146,11 +149,14 @@ class EventProcessor(threading.Thread):
         event_type: str,
         camera: str,
         event_data: dict[str, Any],
+        vehicle_thumbnail: str | None = None,
     ) -> None:
         """handle tracked object event updates."""
         updated_db = False
 
-        if should_update_db(self.events_in_process[event_data["id"]], event_data):
+        if vehicle_thumbnail is not None or should_update_db(
+            self.events_in_process[event_data["id"]], event_data
+        ):
             updated_db = True
             camera_config = self.config.cameras.get(camera)
             if camera_config is None:
@@ -297,6 +303,7 @@ class EventProcessor(threading.Thread):
                 and self.config.cameras[camera].onvif.autotracking.enabled_in_config
                 and (
                     event_type == EventStateEnum.end
+                    or vehicle_thumbnail is not None
                     or time.monotonic()
                     - self._visit_sync_at.get(event_data["id"], float("-inf"))
                     >= 20.0
@@ -306,7 +313,9 @@ class EventProcessor(threading.Thread):
                 # during tracking and always inspect the final event snapshot.
                 self._visit_sync_at[event_data["id"]] = time.monotonic()
                 try:
-                    link_event_to_visit(Event.get_by_id(event_data["id"]))
+                    link_event_to_visit(
+                        Event.get_by_id(event_data["id"]), vehicle_thumbnail
+                    )
                 except Exception:
                     # Optional grouping must never interrupt recorded events.
                     logger.exception(

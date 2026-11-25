@@ -4,6 +4,7 @@ import json
 import logging
 import queue
 import threading
+import time
 from collections import defaultdict
 from enum import Enum
 from multiprocessing import Queue as MpQueue
@@ -116,6 +117,7 @@ class TrackedObjectProcessor(threading.Thread):
 
     def create_camera_state(self, camera: str) -> None:
         """Creates a new camera state."""
+        vehicle_sample_at: dict[str, float] = {}
 
         def start(camera: str, obj: TrackedObject, frame_name: str) -> None:
             self.event_sender.publish(
@@ -141,13 +143,35 @@ class TrackedObjectProcessor(threading.Thread):
             }
             self.dispatcher.publish("events", json.dumps(message), retain=False)
             obj.previous = after
+            event_data = obj.to_dict()
+            if (
+                after["label"] == "car"
+                and not after["false_positive"]
+                and (obj.has_clip or obj.has_snapshot)
+                and camera_state.camera_config.onvif.autotracking.enabled_in_config
+                and time.monotonic()
+                - vehicle_sample_at.get(after["id"], float("-inf"))
+                >= 20.0
+            ):
+                # The normal thumbnail file is written only at track end.
+                # Send a bounded live crop solely to the event processor.
+                image, _ = obj.get_img_bytes(
+                    ext="webp",
+                    timestamp=False,
+                    bounding_box=False,
+                    crop=True,
+                    height=175,
+                )
+                if image:
+                    event_data["vehicle_thumbnail"] = base64.b64encode(image).decode()
+                    vehicle_sample_at[after["id"]] = time.monotonic()
             self.event_sender.publish(
                 (
                     EventTypeEnum.tracked_object,
                     EventStateEnum.update,
                     camera,
                     frame_name,
-                    obj.to_dict(),
+                    event_data,
                 )
             )
 
@@ -155,6 +179,7 @@ class TrackedObjectProcessor(threading.Thread):
             self.ptz_autotracker_thread.ptz_autotracker.autotrack_object(camera, obj)
 
         def end(camera: str, obj: TrackedObject, frame_name: str) -> None:
+            vehicle_sample_at.pop(obj.obj_data["id"], None)
             # populate has_snapshot
             obj.has_snapshot = self.should_save_snapshot(
                 camera_state.camera_config, obj
