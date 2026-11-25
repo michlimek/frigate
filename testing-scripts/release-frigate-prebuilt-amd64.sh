@@ -14,7 +14,7 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 branch="$(git symbolic-ref --short HEAD)"
 case "$branch" in
-  release/0.18.2|feature/group-vehicles-in-review) ;;
+  release/0.18.2|feature/deduplicate-vehicle-mqtt) ;;
   *)
     echo "Build only the reviewed release or candidate branch; got $branch" >&2
     exit 1
@@ -52,6 +52,8 @@ docker run --rm --workdir /opt/frigate --entrypoint python3 "$image" \
   -m unittest -v \
   frigate.test.test_vehicle_visit_matching \
   frigate.test.test_vehicle_visit_store \
+  frigate.test.test_vehicle_mqtt_filter \
+  frigate.test.test_mqtt_topic_registration \
   frigate.test.test_ptz_movement_prediction
 
 docker run --rm --entrypoint /bin/sh "$image" -ec \

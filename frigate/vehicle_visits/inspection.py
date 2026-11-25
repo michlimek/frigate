@@ -1,5 +1,6 @@
 """Extract comparable car features from stored Frigate events."""
 
+import base64
 import binascii
 import logging
 from datetime import UTC, datetime
@@ -51,7 +52,7 @@ def image_hash(image_bytes: bytes | None) -> int | None:
     return bits if 5 <= bits.bit_count() <= 59 else None
 
 
-def inspect_event(event) -> VehicleObservation:
+def inspect_event(event, live_thumbnail: str | None = None) -> VehicleObservation:
     """Inspect one event's own thumbnail, never the camera's current frame."""
     data = event.data if isinstance(event.data, dict) else {}
     plate = data.get("recognized_license_plate")
@@ -59,7 +60,11 @@ def inspect_event(event) -> VehicleObservation:
         # sub_label is not necessarily an LPR plate, do not guess.
         plate = None
     try:
-        photo = get_event_thumbnail_bytes(event)
+        photo = (
+            base64.b64decode(live_thumbnail, validate=True)
+            if live_thumbnail is not None
+            else get_event_thumbnail_bytes(event)
+        )
     except (ValueError, binascii.Error, OSError):
         logger.warning("Cannot read thumbnail for event %s", event.id)
         photo = None

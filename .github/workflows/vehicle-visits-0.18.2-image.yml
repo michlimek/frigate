@@ -107,6 +107,8 @@ jobs:
             -m unittest -v \
             frigate.test.test_vehicle_visit_matching \
             frigate.test.test_vehicle_visit_store \
+            frigate.test.test_vehicle_mqtt_filter \
+            frigate.test.test_mqtt_topic_registration \
             frigate.test.test_ptz_movement_prediction
 
       - name: Generate API documentation from the built runtime

@@ -4,7 +4,7 @@
 set -eu
 addon_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 config="$addon_dir/config.yaml"
-version="0.18.2.post4"
+version="0.18.2.post5"
 registry="ghcr.io"
 image="ghcr.io/michlimek/frigate"
 
@@ -47,7 +47,7 @@ if [ "$status" != "200" ]; then
   exit 1
 fi
 
-backup="$config.bak-before-prebuilt-post4"
+backup="$config.bak-before-prebuilt-post5"
 if [ -e "$backup" ]; then
   echo "Backup already exists: $backup; refusing overwrite" >&2
   exit 1
@@ -58,7 +58,7 @@ if ! grep -Eq '^version:[[:space:]]*' "$config"; then
 fi
 
 cp "$config" "$backup"
-sed -e 's/^version:.*/version: "0.18.2.post4"/' \
+sed -e 's/^version:.*/version: "0.18.2.post5"/' \
     -e '/^image:[[:space:]]*/d' "$backup" > "$config.tmp"
 printf '\nimage: %s\n' "$image" >> "$config.tmp"
 mv "$config.tmp" "$config"

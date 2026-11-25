@@ -107,10 +107,34 @@ then do not trigger new Driveway Guard notifications. A bounded six-second
 wait handles database-save latency; if the API fails, Driveway Guard returns
 to its earlier local matching rather than losing all arrival alerts.
 
-The new feature does not change Frigate's native MQTT `frigate/events`
-payload. Existing consumers remain compatible.
+## MQTT notifications for PTZ cars
 
-## Installable image: SimplyQ 0.18.2.post4
+The existing `frigate/events` and `frigate/reviews` MQTT topics use the
+persisted vehicle matcher on cameras with PTZ autotracking configured.
+No MQTT topic, configuration option, or notification blueprint is added.
+The MQTT-only filter waits up to three seconds for the live event link,
+without holding the tracked-object or Review publisher threads. Live cropped
+thumbnails are passed internally at most every 20 seconds per car, rather
+than relying on the thumbnail file that is written only at track end.
+
+A confidently linked repeat is suppressed only if the same vehicle group,
+severity and zones were already published on that MQTT topic during this
+Frigate session. A new group, ambiguous/missing link, lookup failure, newly
+observed zone or severity, or mixed person/audio Review is published normally.
+If a previously suppressed Review becomes significant, it starts a normal
+MQTT lifecycle using its real Review ID before updates and end are sent.
+Coverage is deliberately not restored across a Frigate restart: the first
+sighting may notify again rather than silently dropping an arrival.
+No historical import or manual correction emits an MQTT arrival.
+
+Original Event and Review rows, native IDs, recordings, object counters,
+snapshots, WebSocket messages and internal WebPush delivery are unchanged.
+For MQTT-based HA notifications, disable parallel notifications that would
+otherwise duplicate them. A returning identical car may still be grouped with
+an earlier visit until departure is confirmed; validate this on the real PTZ
+camera before relying on deduplication for security-critical notifications.
+
+## Installable image: SimplyQ 0.18.2.post5
 
 For existing GitHub add-on installations use the unchanged repository
 `https://github.com/michlimek/frigate#ha-addon`. The release workflow promotes
@@ -130,12 +154,12 @@ The new HA add-on has **no Dockerfile** and only pulls:
 
 ```yaml
 slug: frigate-ptz
-version: "0.18.2.post4"
+version: "0.18.2.post5"
 image: ghcr.io/michlimek/frigate
 ```
 
 The image reference used by HA Supervisor will be:
-`ghcr.io/michlimek/frigate:0.18.2.post4`.
+`ghcr.io/michlimek/frigate:0.18.2.post5`.
 
 This image is **not available merely because the version was committed**.
 External CI must pass the unit tests, compiled frontend check, Frigate API
@@ -166,7 +190,7 @@ and triggers local Docker compilation must never be used again.
 ### External build without GitHub Actions
 
 On an AMD64 Linux workstation or an x86-64 PC running Docker Desktop/WSL2
-and Git, check out the post4 candidate (before merge) or release source
+and Git, check out the post5 candidate (before merge) or release source
 (after merge) and run
 `testing-scripts/release-frigate-prebuilt-amd64.sh`. It tests locally and
 does not publish by default. When validated and authenticated to GHCR,

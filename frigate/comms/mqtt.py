@@ -8,6 +8,7 @@ from paho.mqtt.enums import CallbackAPIVersion
 
 from frigate.comms.base_communicator import Communicator
 from frigate.config import FrigateConfig
+from frigate.vehicle_visits.mqtt_filter import VehicleMqttPublisher
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class MqttClient(Communicator):
         self.config = config
         self.mqtt_config = config.mqtt
         self.connected = False
+        self._vehicle_publisher = VehicleMqttPublisher(config, self._publish_raw)
 
     def subscribe(self, receiver: Callable) -> None:
         """Wrapper for allowing dispatcher to subscribe."""
@@ -31,14 +33,24 @@ class MqttClient(Communicator):
             logger.debug(f"Unable to publish to {topic}: client is not connected")
             return
 
-        self.client.publish(
+        if self._vehicle_publisher.submit(topic, payload, retain):
+            return
+        self._publish_raw(topic, payload, retain)
+
+    def _publish_raw(self, topic: str, payload: Any, retain: bool) -> bool:
+        """Send a message without vehicle filtering or recursive dispatch."""
+        if not self.connected:
+            return False
+        result = self.client.publish(
             f"{self.mqtt_config.topic_prefix}/{topic}",
             payload,
             qos=self.config.mqtt.qos,
             retain=retain,
         )
+        return result.rc == mqtt.MQTT_ERR_SUCCESS
 
     def stop(self) -> None:
+        self._vehicle_publisher.stop()
         self.publish("available", "stopped", retain=True)
         self.client.disconnect()
 
