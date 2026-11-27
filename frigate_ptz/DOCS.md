@@ -83,3 +83,39 @@ image does not roll back a migrated database.
 
 Do not create a second add-on from the GitHub repository on the production
 host unless explicitly migrating the existing `local_frigate-ptz` identity.
+
+## Optional required NFS media storage
+
+For an HA installation that must never intentionally fall back to local
+media storage, create a plain text file named `required_storage_source`
+in the app's local configuration directory (mapped to `/config`), containing
+the exact NFS server and exported path as seen in the mount table, for
+example:
+
+```text
+192.0.2.1:/mnt/pool/frigate
+```
+
+Restart the app to enable or change the requirement. Leave the file absent
+to retain the normal Frigate behavior. A present but invalid file prevents
+startup. Do not put the database on the NFS share.
+
+The guard resolves the actual kernel mount ID of `/media/frigate`, rather
+than guessing from a matching directory name or the autofs entry. Before
+starting Frigate, it waits for the configured writable NFS source and
+successfully creates, flushes and removes a unique probe file through the
+verified directory descriptor. During operation it checks the actual
+mount identity and read-only flags every five seconds. If the mount is
+lost or replaced it requests shutdown of the complete Frigate container.
+Enable the Home Assistant app Watchdog if automatic restart after failure
+is desired; a manual start will also run the same startup check.
+
+This is a periodic protection, not an atomic filesystem write barrier.
+There is a short detection and shutdown window. An NFS server that is
+unreachable while its mount remains attached does not trigger a mount-loss
+shutdown merely because of connectivity loss; I/O may fail or block.
+Monitor write health separately. A stopped app or a startup wait means
+recordings, detection and live view are unavailable. Validate on the actual
+HAOS host after release by checking startup with working NFS, deliberately
+testing an unavailable share during a maintenance window, and checking
+recovery before relying on the guard.

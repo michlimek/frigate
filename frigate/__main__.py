@@ -12,6 +12,12 @@ from frigate.app import FrigateApp
 from frigate.config import FrigateConfig
 from frigate.log import setup_logging
 from frigate.util.config import find_config_file
+from frigate.util.network_storage import (
+    read_requirement,
+    wait_for_storage,
+    watch_storage,
+)
+from frigate.util.services import restart_frigate
 
 
 def main() -> None:
@@ -39,6 +45,19 @@ def main() -> None:
     )
     parser.add_argument("--validate-config", action="store_true")
     args = parser.parse_args()
+
+    # A required media mount must be available before starting any media writer.
+    required_storage = None
+    if not args.validate_config:
+        try:
+            required_storage = read_requirement()
+        except (OSError, ValueError) as error:
+            print(f"Invalid required storage configuration: {error}", file=sys.stderr)
+            sys.exit(1)
+        if required_storage is not None and not wait_for_storage(
+            required_storage, stop_event
+        ):
+            return
 
     # Load the configuration.
     try:
@@ -115,7 +134,15 @@ def main() -> None:
         sys.exit(0)
 
     # Run the main application.
-    FrigateApp(config, manager, stop_event).start()
+    app = FrigateApp(config, manager, stop_event)
+    if required_storage is not None:
+        threading.Thread(
+            target=watch_storage,
+            args=(required_storage, stop_event, restart_frigate),
+            name="required_storage_guard",
+            daemon=True,
+        ).start()
+    app.start()
 
 
 if __name__ == "__main__":
